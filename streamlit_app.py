@@ -1,16 +1,9 @@
 import streamlit as st
-
-st.title("ASGLA Rechner")
-st.write(
-    "Hier entsteht ein ASGLA Rechner."
-)
-
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-import streamlit as st
 
 # Düsseldorfer Tabelle als Dictionarys # Pflegebedarf
 duesseldorfer_tabellen = {
@@ -567,12 +560,7 @@ def speichere_pdf():
                          aktueller_rechenweg, dateiname)
             label_ergebnis.config(text=f"PDF gespeichert: {dateiname}\n\n\n{aktueller_rechenweg}")
 
-# Hilfsfunktion zum Ein-/Ausblenden muss vor GUI-Elementen stehen
-def toggle_fields(var, frame):
-    if var.get():
-        frame.grid()
-    else:
-        frame.grid_remove()
+
 
 # Neue Funktion für Auswahlfenster
 def oeffne_auswahlfenster_sockelbetrag(elternteil):
@@ -706,7 +694,7 @@ def oeffne_auswahlfenster_sockelbetrag(elternteil):
 
     tk.Button(fenster, text="Bestätigen", command=bestaetigen).grid(pady=10, row=8, column=0)
 
-import streamlit as st
+
 
 # Titel und feste "Fenstergröße" (Streamlit ist responsiv, aber wir können die Breite anpassen)
 st.set_page_config(page_title="Ausgleichsanspruch Wechselmodell", layout="wide")
@@ -730,19 +718,15 @@ jahr = col2.selectbox("Jahr:", jahre, index=0)  # Standardwert = 2025
 # Ergebnis-Variable (wie tk.StringVar)
 ergebnis_var = ""
 
-# Beispiel-Ausgabe
-if st.button("Zeige Auswahl"):
-    ergebnis_var = f"Ausgewählt: {monat} {jahr}"
-    st.success(ergebnis_var)
-
 
 # Werte bei Nichteingabe auf 0 setzen
-def get_float_or_zero(entry):
+def get_float_or_zero(val):
     try:
-        val = entry.get().replace(',', '.')  # Hier direkt Komma zu Punkt!
+        val = val.replace(',', '.')  # Komma zu Punkt
         return float(val) if val.strip() else 0.0
     except ValueError:
         return 0.0
+
 
 st.header("Eingaben Vater")
 
@@ -759,10 +743,8 @@ abzugsposten1_mutter = st.text_input("Abzugsposten 1 Mutter:", "100")
 abzugsposten2_mutter = st.text_input("Abzugsposten 2 Mutter:", "100")
 
 ### Zum Kind
-tk.Label(content_frame, text="Alter des Kindes:").grid(row=10, column=0)
-entry_alter_kind = tk.Entry(content_frame)
-entry_alter_kind.insert(0, "10")  # Beispielwert
-entry_alter_kind.grid(row=10, column=1)
+alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
+
 
 # SOCKELBETRAG
 jahr = jahre[0]
@@ -839,42 +821,21 @@ btn_aendere_mutter.grid(row=12, column=2, padx=10)
 
 jahr_combobox.bind("<<ComboboxSelected>>", jahr_geaendert)
 
-# Zusatzbedarf-Controls
-var_mehrbedarf = tk.IntVar()
-chk_mehrbedarf = tk.Checkbutton(content_frame, text='Mehrbedarf hinzufügen', variable=var_mehrbedarf,
-                           command=lambda: toggle_fields(var_mehrbedarf, frame_mehrbedarf))
-chk_mehrbedarf.grid(row=15,column=0,sticky='w')
-frame_mehrbedarf = tk.Frame(content_frame)
-# innerhalb frame_mehrbedarf
-tk.Label(frame_mehrbedarf,text='Bezeichnung:').grid(row=0,column=0)
-entry_mehrbez = tk.Entry(frame_mehrbedarf); entry_mehrbez.grid(row=0,column=1)
-entry_mehrbez.insert(0, "Hort")
-tk.Label(frame_mehrbedarf,text='Betrag:').grid(row=1,column=0)
-entry_mehrbetrag = tk.Entry(frame_mehrbedarf); entry_mehrbetrag.grid(row=1,column=1)
-entry_mehrbetrag.insert(0, "60")
-# initial versteckt
-frame_mehrbedarf.grid(row=16,column=0,columnspan=2); frame_mehrbedarf.grid_remove()
 
-var_mehrbedarf.set(1)  # Checkbox voraktivieren
-toggle_fields(var_mehrbedarf, frame_mehrbedarf)
+# Checkbox: Mehrbedarf
+zeige_mehrbedarf = st.checkbox("Mehrbedarf hinzufügen", value=True)
 
-var_sonderbedarf = tk.IntVar()
-chk_sonderbedarf = tk.Checkbutton(content_frame, text='Sonderbedarf hinzufügen', variable=var_sonderbedarf,
-                             command=lambda: toggle_fields(var_sonderbedarf, frame_sonderbedarf))
-chk_sonderbedarf.grid(row=17,column=0,sticky='w')
-frame_sonderbedarf = tk.Frame(content_frame)
-# innerhalb frame_sonder
-tk.Label(frame_sonderbedarf,text='Bezeichnung:').grid(row=0,column=0)
-entry_sonderbez = tk.Entry(frame_sonderbedarf); entry_sonderbez.grid(row=0,column=1)
-entry_sonderbez.insert(0, "Zahnspange")  # Beispielwert
-tk.Label(frame_sonderbedarf,text='Betrag:').grid(row=1,column=0)
-entry_sonderbetrag = tk.Entry(frame_sonderbedarf); entry_sonderbetrag.grid(row=1,column=1)
-entry_sonderbetrag.insert(0, "80")  # Beispielwert in EUR
-# initial versteckt
-frame_sonderbedarf.grid(row=18,column=0,columnspan=2); frame_sonderbedarf.grid_remove()
+if zeige_mehrbedarf:
+    mehrbez = st.text_input("Bezeichnung Mehrbedarf", value="Hort")
+    mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value="60")
 
-var_sonderbedarf.set(1)  # Checkbox voraktivieren
-toggle_fields(var_sonderbedarf, frame_sonderbedarf)
+# Checkbox: Sonderbedarf
+zeige_sonderbedarf = st.checkbox("Sonderbedarf hinzufügen", value=True)
+
+if zeige_sonderbedarf:
+    sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
+    sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value="80")
+
 
 tk.Label(content_frame, text="Kindergeldempfänger:").grid(row=20, column=0)
 kindergeld_var = tk.StringVar(value="Mutter")
@@ -891,4 +852,3 @@ button_speichern = tk.Button(content_frame, text="Als PDF speichern", command=sp
 button_speichern.grid(row=23, column=0, columnspan=2)
 
 root.mainloop()
-
