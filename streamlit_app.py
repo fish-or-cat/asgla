@@ -5,10 +5,6 @@ st.write(
     "Hier entsteht ein ASGLA Rechner."
 )
 
-import tkinter as tk
-from tkinter import filedialog
-from tkinter import ttk
-from tkinter import simpledialog, messagebox
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
