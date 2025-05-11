@@ -481,46 +481,42 @@ def erstelle_pdf(monat, jahr, einkommen_mutter, einkommen_vater, kindergeld, reg
 def berechne_und_zeige():
     # Berechnung des Einkommens der Mutter und des Vaters
 
-    # Hole die Werte aus den Dropdown-Menüs
-    monat = monat_combobox.get()
-    jahr = jahr_combobox.get()
-
     # Mutter
-    haupttaetigkeit_mutter = get_float_or_zero(entry_haupttaetigkeit_mutter)
-    weitere_einkuenfte_mutter = get_float_or_zero(entry_weitere_einkuenfte_mutter)
+    haupttaetigkeit_mutter = get_float_or_zero(haupttaetigkeit_mutter_input)
+    weitere_einkuenfte_mutter = get_float_or_zero(weitere_einkuenfte_mutter_input)
     einkommen_mutter = haupttaetigkeit_mutter + weitere_einkuenfte_mutter
 
     global abzugsposten1_mutter, abzugsposten2_mutter, abzug_mutter
-    abzugsposten1_mutter = get_float_or_zero(entry_abzugsposten1_mutter)
-    abzugsposten2_mutter = get_float_or_zero(entry_abzugsposten2_mutter)
+    abzugsposten1_mutter = get_float_or_zero(abzugsposten1_mutter_input)
+    abzugsposten2_mutter = get_float_or_zero(abzugsposten2_mutter_input)
     abzug_mutter = abzugsposten1_mutter + abzugsposten2_mutter
 
     bereinigtes_einkommen_mutter = einkommen_mutter - abzug_mutter
 
     # Vater
-    haupttaetigkeit_vater = get_float_or_zero(entry_haupttaetigkeit_vater)
-    weitere_einkuenfte_vater = get_float_or_zero(entry_weitere_einkuenfte_vater)
+    haupttaetigkeit_vater = get_float_or_zero(haupttaetigkeit_vater_input)
+    weitere_einkuenfte_vater = get_float_or_zero(weitere_einkuenfte_vater_input)
     einkommen_vater = haupttaetigkeit_vater + weitere_einkuenfte_vater
 
     global abzugsposten1_vater, abzugsposten2_vater, abzug_vater
-    abzugsposten1_vater = get_float_or_zero(entry_abzugsposten1_vater)
-    abzugsposten2_vater = get_float_or_zero(entry_abzugsposten2_vater)
+    abzugsposten1_vater = get_float_or_zero(abzugsposten1_vater_input)
+    abzugsposten2_vater = get_float_or_zero(abzugsposten2_vater_input)
     abzug_vater = abzugsposten1_vater + abzugsposten2_vater
 
     bereinigtes_einkommen_vater = einkommen_vater - abzug_vater
 
     ## BEDARF Kind
-    alter = int(entry_alter_kind.get() or 0)  # Zum Beispiel vom Benutzer eingegeben
+    alter = alter_kind or 0  # Zum Beispiel vom Benutzer eingegeben
 
     global mehrbedarf, sonderbedarf
     mehrbedarf = 0; mehrbez = ''
-    if var_mehrbedarf.get():
-        mehrbedarf = get_float_or_zero(entry_mehrbetrag)
-        mehrbez = entry_mehrbez.get() or 'Mehrbedarf'
+    if zeige_mehrbedarf:
+        mehrbedarf = get_float_or_zero(mehrbetrag)
+        mehrbez = mehrbez or 'Mehrbedarf'
     sonderbedarf = 0; sonderbez = ''
-    if var_sonderbedarf.get():
-        sonderbedarf = get_float_or_zero(entry_sonderbetrag)
-        sonderbez = entry_sonderbez.get() or 'Sonderbedarf'
+    if zeige_sonderbedarf:
+        sonderbedarf = get_float_or_zero(sonderbetrag)
+        sonderbez = sonderbez or 'Sonderbedarf'
 
     # Berechnung des Bedarfs des Kindes mit der Düsseldorfer Tabelle
     regelbedarf = berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutter, alter, jahr)
@@ -561,138 +557,55 @@ def speichere_pdf():
             label_ergebnis.config(text=f"PDF gespeichert: {dateiname}\n\n\n{aktueller_rechenweg}")
 
 
-
-# Neue Funktion für Auswahlfenster
-def oeffne_auswahlfenster_sockelbetrag(elternteil):
-    def bestaetigen():
-        nonlocal neuer_betrag
-        auswahl = var.get()
-        if auswahl == "angemessen":
-            neuer_betrag = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl == "notwendig":
-            if elternteil == "vater":
-                flag = nicht_erwerbstätig_vater.get()
-            else:
-                flag = nicht_erwerbstätig_mutter.get()
-            key = "notwendig_nicht_erwerbstätig" if flag == 1 else "notwendig_erwerbstätig"
-            neuer_betrag = SELBSTBEHALTE[jahr][key]
-        elif auswahl == "custom":
-            try:
-                neuer_betrag = float(entry_custom.get())
-            except ValueError:
-                messagebox.showerror("Fehler", "Bitte eine gültige Zahl eingeben.")
-                return
-        else:
-            return
-
-        fenster.destroy()
-
-        # wähle das richtige Adjektiv und speichere es passend
-        if elternteil == "vater":
-            global sockelbetrag_vater, adjektiv_sockelbetrag_vater, auswahl_vater, rette_sockelbetrag_vater
-            sockelbetrag_vater = neuer_betrag
-
-            if auswahl == "angemessen":
-                adjektiv_sockelbetrag_vater = "angemessene"
-            elif auswahl == "notwendig":
-                flag = nicht_erwerbstätig_vater.get()
-                if flag == 1:
-                    adjektiv_sockelbetrag_vater = "notwendige (nicht erwerbstätig)"
-                else:
-                    adjektiv_sockelbetrag_vater = "notwendige (erwerbstätig)"
-            else:
-                adjektiv_sockelbetrag_vater = "benutzerdefinierte"
-
-            if auswahl == "custom":
-                rette_sockelbetrag_vater = neuer_betrag # Falls Nutzer Jahr nachträglich ändert
-            auswahl_vater = auswahl
-            print(f"Auswahl Vater: {auswahl_vater}")
-            print(f"geretteter sockelbetrag: {rette_sockelbetrag_vater}")
-            label_sockel_vater.config(
-                text=f"Für den Kindsvater wird der {adjektiv_sockelbetrag_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})"
-            )
-
-        elif elternteil == "mutter":
-            global sockelbetrag_mutter, adjektiv_sockelbetrag_mutter, auswahl_mutter, rette_sockelbetrag_mutter
-            sockelbetrag_mutter = neuer_betrag
-
-            if auswahl == "angemessen":
-                adjektiv_sockelbetrag_mutter = "angemessene"
-            elif auswahl == "notwendig":
-                flag = nicht_erwerbstätig_mutter.get()
-                if flag == 1:
-                    adjektiv_sockelbetrag_mutter = "notwendige (nicht erwerbstätig)"
-                else:
-                    adjektiv_sockelbetrag_mutter = "notwendige (erwerbstätig)"
-            else:
-                adjektiv_sockelbetrag_mutter = "benutzerdefinierte"
-
-            if auswahl == "custom":
-                rette_sockelbetrag_mutter = neuer_betrag # Falls Nutzer Jahr nachträglich ändert
-            auswahl_mutter = auswahl
-            print(f"Auswahl Mutter: {auswahl_mutter}")
-            print(f"geretteter sockelbetrag: {rette_sockelbetrag_mutter}")
-            label_sockel_mutter.config(
-                text=f"Für die Kindsmutter wird der {adjektiv_sockelbetrag_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})"
-            )
-
+# Funktion für die Bestätigung
+def bestaetigen(elternteil, auswahl, flag, custom_betrag=None):
     neuer_betrag = None
-    fenster = tk.Toplevel()
-    fenster.title(f"Sockelbetrag für {elternteil.capitalize()} auswählen")
-
-    global var_sockel_vater, var_sockel_mutter
-    var = var_sockel_vater if elternteil == "vater" else var_sockel_mutter
-
-    tk.Label(fenster, text="Bitte Sockelbetrag auswählen:").grid(sticky="w", padx=10, pady=5, row=0, column=0)
-    tk.Radiobutton(fenster, text=f"Angemessen ({SELBSTBEHALTE[jahr]['angemessen']} €)", variable=var, value="angemessen").grid(sticky="w", padx=20, row=1, column=0)
-    tk.Radiobutton(fenster, text=f"Notwendig ({SELBSTBEHALTE[jahr]['notwendig_erwerbstätig']} €)", variable=var, value="notwendig").grid(sticky="w", padx=20, row=2, column=0)
-
-    # dynamische Checkbuttons Erwerbstätigkeit
-    chk_vater = tk.Checkbutton(fenster, text=f"Vater nicht erwerbstätig ({SELBSTBEHALTE[jahr]['notwendig_nicht_erwerbstätig']} €)", variable=nicht_erwerbstätig_vater)
-    chk_mutter = tk.Checkbutton(fenster, text=f"Mutter nicht erwerbstätig ({SELBSTBEHALTE[jahr]['notwendig_nicht_erwerbstätig']} €)", variable=nicht_erwerbstätig_mutter)
-    # Zuerst beide nicht anzeigen   # (kein .grid() hier)
-    def toggle_checkbox_erwerbstätigkeit(*args):
-        if var.get() == "notwendig":
-            if elternteil == "vater":
-                chk_vater.grid(row=2, column=1, padx=20, sticky="w")
-                chk_mutter.grid_forget()
-            elif elternteil == "mutter":
-                chk_mutter.grid(row=2, column=1, padx=20, sticky="w")
-                chk_vater.grid_forget()
-        else:
-            chk_vater.grid_forget()
-            chk_mutter.grid_forget()
-
-    global trace_id
-    try:
-        var.trace_remove("write", trace_id)
-    except Exception:
-        pass  # Beim ersten Mal gibt's noch keinen trace_id
-
-    trace_id = var.trace_add("write", toggle_checkbox_erwerbstätigkeit)
-    # Anfangszustand setzen
-    toggle_checkbox_erwerbstätigkeit()
-
+    if auswahl == "angemessen":
+        neuer_betrag = SELBSTBEHALTE[jahr]["angemessen"]
+    elif auswahl == "notwendig":
+        key = "notwendig_nicht_erwerbstätig" if flag else "notwendig_erwerbstätig"
+        neuer_betrag = SELBSTBEHALTE[jahr][key]
+    elif auswahl == "custom":
+        try:
+            neuer_betrag = float(custom_betrag)
+        except ValueError:
+            st.error("Bitte eine gültige Zahl eingeben.")
+            return
+    else:
+        return
     
-    tk.Radiobutton(fenster, text="Benutzerdefiniert", variable=var, value="custom", command=lambda: zeige_custom_betrag(entry_custom)).grid(sticky="w", padx=20, row=4, column=0)
+    # Sockelbetrag speichern
+    if elternteil == "vater":
+        global sockelbetrag_vater, adjektiv_sockelbetrag_vater
+        sockelbetrag_vater = neuer_betrag
+        adjektiv_sockelbetrag_vater = "angemessen" if auswahl == "angemessen" else "notwendig (nicht erwerbstätig)" if flag else "notwendig (erwerbstätig)" if auswahl == "notwendig" else "benutzerdefiniert"
+        st.write(f"Für den Kindsvater wird der {adjektiv_sockelbetrag_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
+    elif elternteil == "mutter":
+        global sockelbetrag_mutter, adjektiv_sockelbetrag_mutter
+        sockelbetrag_mutter = neuer_betrag
+        adjektiv_sockelbetrag_mutter = "angemessen" if auswahl == "angemessen" else "notwendig (nicht erwerbstätig)" if flag else "notwendig (erwerbstätig)" if auswahl == "notwendig" else "benutzerdefiniert"
+        st.write(f"Für die Kindsmutter wird der {adjektiv_sockelbetrag_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
 
-    # Eingabefeld für benutzerdefinierten Betrag
-    entry_custom_label = tk.Label(fenster, text="Eigener Betrag (€):")
-    entry_custom_label.grid(sticky="w", padx=20, pady=(10,0), row=5, column=0)
-    entry_custom_label.grid_forget()
-    entry_custom = tk.Entry(fenster)
-    entry_custom.grid(sticky="w", padx=20, pady=(0,10), row=6, column=0)
-    entry_custom.grid_forget()  # Standardmäßig verstecken
+# Auswahlfenster für den Sockelbetrag
+def oeffne_auswahlfenster_sockelbetrag(elternteil):
+    # Auswahlmöglichkeiten für den Sockelbetrag
+    auswahl = st.radio("Bitte Sockelbetrag auswählen:", 
+                       options=["angemessen", "notwendig", "custom"])
+    
+    if auswahl == "notwendig":
+        # Dynamische Checkbox für Erwerbstätigkeit
+        flag = st.checkbox(f"Nicht erwerbstätig ({SELBSTBEHALTE[jahr]['notwendig_nicht_erwerbstätig']} €)")
+    else:
+        flag = False
 
-    def zeige_custom_betrag(entry):
-        if var.get() == "custom":
-            entry_custom_label.grid(sticky="w", padx=20, pady=(10,0), row=5, column=0)
-            entry.grid(sticky="w", padx=20, pady=(0,10), row=6, column=0)  # Zeige Eingabefeld
-        else:
-            entry_custom_label.grid_forget()
-            entry.grid_forget()  # Verstecke Eingabefeld
+    if auswahl == "custom":
+        custom_betrag = st.number_input("Eigener Betrag (€):")
+    else:
+        custom_betrag = None
 
-    tk.Button(fenster, text="Bestätigen", command=bestaetigen).grid(pady=10, row=8, column=0)
+    # Bestätigungsbutton
+    if st.button("Bestätigen"):
+        bestaetigen(elternteil, auswahl, flag, custom_betrag)
 
 
 
@@ -730,17 +643,19 @@ def get_float_or_zero(val):
 
 st.header("Eingaben Vater")
 
-haupttaetigkeit_vater = st.text_input("Haupttätigkeit Vater:", "5000")
-weitere_einkuenfte_vater = st.text_input("Weitere Einkünfte Vater:", "300")
-abzugsposten1_vater = st.text_input("Abzugsposten 1 Vater:", "100")
-abzugsposten2_vater = st.text_input("Abzugsposten 2 Vater:", "100")
+haupttaetigkeit_vater_input = st.text_input("Haupttätigkeit Vater:", value="5000")
+weitere_einkuenfte_vater_input = st.text_input("Weitere Einkünfte Vater:", value="300")
+abzugsposten1_vater_input = st.text_input("Abzugsposten 1 Vater:", value="100")
+abzugsposten2_vater_input = st.text_input("Abzugsposten 2 Vater:", value="100")
 
 st.header("Eingaben Mutter")
 
-haupttaetigkeit_mutter = st.text_input("Haupttätigkeit Mutter:", "1500")
-weitere_einkuenfte_mutter = st.text_input("Weitere Einkünfte Mutter:", "100")
-abzugsposten1_mutter = st.text_input("Abzugsposten 1 Mutter:", "100")
-abzugsposten2_mutter = st.text_input("Abzugsposten 2 Mutter:", "100")
+haupttaetigkeit_mutter_input = st.text_input("Haupttätigkeit Mutter:", value="1500")
+weitere_einkuenfte_mutter_input = st.text_input("Weitere Einkünfte Mutter:", value="100")
+abzugsposten1_mutter_input = st.text_input("Abzugsposten 1 Mutter:", value="100")
+abzugsposten2_mutter_input = st.text_input("Abzugsposten 2 Mutter:", value="100")
+
+
 
 ### Zum Kind
 alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
@@ -748,57 +663,48 @@ alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
 
 # SOCKELBETRAG
 jahr = jahre[0]
-var_sockel_vater = tk.StringVar(value="angemessen")
-var_sockel_mutter = tk.StringVar(value="angemessen")
-nicht_erwerbstätig_vater = tk.IntVar(value=0)
-nicht_erwerbstätig_mutter = tk.IntVar(value=0)
-sockelbetrag_vater = SELBSTBEHALTE[jahr]["angemessen"]
-sockelbetrag_mutter = SELBSTBEHALTE[jahr]["angemessen"]
+var_sockel_vater = "angemessen"
+var_sockel_mutter = "angemessen"
+nicht_erwerbstätig_vater = 0
+nicht_erwerbstätig_mutter = 0
+sockelbetrag_vater = SELBSTBEHALTE[jahr]['angemessen']
+sockelbetrag_mutter = SELBSTBEHALTE[jahr]['angemessen']
 auswahl_vater = None
 auswahl_mutter = None
 rette_sockelbetrag_vater = None
 rette_sockelbetrag_mutter = None
-adjektiv_sockelbetrag_mutter = f"angemessene"
-adjektiv_sockelbetrag_vater = f"angemessene"
+adjektiv_sockelbetrag_mutter = "angemessene"
+adjektiv_sockelbetrag_vater = "angemessene"
 
-def jahr_geaendert(event=None):
-    global jahr, sockelbetrag_vater, sockelbetrag_mutter
-    jahr = jahr_combobox.get()
+# Funktion, die bei Änderung des Jahres aufgerufen wird
+def jahr_geaendert(jahr):
+    global sockelbetrag_vater, sockelbetrag_mutter, auswahl_vater, auswahl_mutter
 
+    # Update für den Vater
     if rette_sockelbetrag_vater is not None:
         sockelbetrag_vater = rette_sockelbetrag_vater
     else:
-        if auswahl_vater is None:
-            sockelbetrag_vater = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl_vater == "angemessen":
+        if auswahl_vater == "angemessen":
             sockelbetrag_vater = SELBSTBEHALTE[jahr]["angemessen"]
         elif auswahl_vater == "notwendig":
-            flag = nicht_erwerbstätig_vater.get()
-            key = "notwendig_nicht_erwerbstätig" if flag == 1 else "notwendig_erwerbstätig"
-            sockelbetrag_vater = SELBSTBEHALTE[jahr][key]
+            sockelbetrag_vater = SELBSTBEHALTE[jahr]["notwendig_erwerbstätig"]  # Beispiel, kann weiter angepasst werden
         else:  # custom
-                sockelbetrag_vater = sockelbetrag_vater  # bleibt gleich (sollte eigentlich nie hier landen, weil custom ja gerettet wird)
+            sockelbetrag_vater = sockelbetrag_vater  # bleibt gleich
 
+    # Update für die Mutter
     if rette_sockelbetrag_mutter is not None:
         sockelbetrag_mutter = rette_sockelbetrag_mutter
     else:
-        if auswahl_mutter is None:
-            sockelbetrag_mutter = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl_mutter == "angemessen":
+        if auswahl_mutter == "angemessen":
             sockelbetrag_mutter = SELBSTBEHALTE[jahr]["angemessen"]
         elif auswahl_mutter == "notwendig":
-            flag = nicht_erwerbstätig_mutter.get()
-            key = "notwendig_nicht_erwerbstätig" if flag == 1 else "notwendig_erwerbstätig"
-            sockelbetrag_mutter = SELBSTBEHALTE[jahr][key]
+            sockelbetrag_mutter = SELBSTBEHALTE[jahr]["notwendig_erwerbstätig"]  # Beispiel, kann weiter angepasst werden
         else:  # custom
-                sockelbetrag_mutter = sockelbetrag_mutter  # bleibt gleich (sollte eigentlich nie hier landen, weil custom ja gerettet wird)
-                
-    label_sockel_vater.config(
-        text=f"Für den Kindsvater wird der {adjektiv_sockelbetrag_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})"
-    )
-    label_sockel_mutter.config(
-        text=f"Für die Kindsmutter wird der {adjektiv_sockelbetrag_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})"
-    )
+            sockelbetrag_mutter = sockelbetrag_mutter  # bleibt gleich
+
+    # Anzeige der Ergebnisse
+    st.write(f"Für den Kindsvater wird der {auswahl_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
+    st.write(f"Für die Kindsmutter wird der {auswahl_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
 
 def aendere_sockelbetrag_vater():
     oeffne_auswahlfenster_sockelbetrag("vater")
@@ -807,19 +713,17 @@ def aendere_sockelbetrag_vater():
 def aendere_sockelbetrag_mutter():
     oeffne_auswahlfenster_sockelbetrag("mutter")
 
-label_sockel_vater = tk.Label(content_frame, text=f"Für den Kindsvater wird der angemessene Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-label_sockel_vater.grid(row=11, column=0, columnspan=2, sticky="w", pady=(10,0))
+label_sockel_vater = st.write(f"Für den Kindsvater wird der angemessene Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
 
-btn_aendere_vater = tk.Button(content_frame, text="Ändern", command=aendere_sockelbetrag_vater)
-btn_aendere_vater.grid(row=11, column=2, padx=10)
+if st.button("Ändern", key="btn_aendere_sockelbetrag_vater"):
+    aendere_sockelbetrag_vater()
 
-label_sockel_mutter = tk.Label(content_frame, text=f"Für die Kindsmutter wird der angemessene Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-label_sockel_mutter.grid(row=12, column=0, columnspan=2, sticky="w")
+label_sockel_mutter = st.write(f"Für die Kindsmutter wird der angemessene Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
 
-btn_aendere_mutter = tk.Button(content_frame, text="Ändern", command=aendere_sockelbetrag_mutter)
-btn_aendere_mutter.grid(row=12, column=2, padx=10)
+if st.button("Ändern", key="btn_aendere_sockelbetrag_mutter"):
+    aendere_sockelbetrag_mutter()
 
-jahr_combobox.bind("<<ComboboxSelected>>", jahr_geaendert)
+jahr_geaendert(jahr)
 
 
 # Checkbox: Mehrbedarf
@@ -827,28 +731,25 @@ zeige_mehrbedarf = st.checkbox("Mehrbedarf hinzufügen", value=True)
 
 if zeige_mehrbedarf:
     mehrbez = st.text_input("Bezeichnung Mehrbedarf", value="Hort")
-    mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value="60")
+    mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value=60)
 
 # Checkbox: Sonderbedarf
 zeige_sonderbedarf = st.checkbox("Sonderbedarf hinzufügen", value=True)
 
 if zeige_sonderbedarf:
     sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
-    sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value="80")
+    sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value=80)
 
 
-tk.Label(content_frame, text="Kindergeldempfänger:").grid(row=20, column=0)
-kindergeld_var = tk.StringVar(value="Mutter")
-tk.Radiobutton(content_frame, text="Mutter", variable=kindergeld_var, value="Mutter").grid(row=20, column=1, sticky="w")
-tk.Radiobutton(content_frame, text="Vater", variable=kindergeld_var, value="Vater").grid(row=20, column=2, sticky="w")
+kindergeld_var = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
 
+# Berechnen Button
+if st.button("Berechnen"):
+    berechne_und_zeige()
 
-tk.Button(content_frame, text="Berechnen", command=berechne_und_zeige).grid(row=21, column=0, columnspan=2)
+# Ergebnis-Label
+label_ergebnis = st.empty()  # Platzhalter für das Ergebnis
+label_ergebnis.text("")  # Anfangszustand leer
 
-label_ergebnis = tk.Label(content_frame, text="", justify=tk.LEFT, wraplength=400)
-label_ergebnis.grid(row=22, column=0, columnspan=2)
-
-button_speichern = tk.Button(content_frame, text="Als PDF speichern", command=speichere_pdf, state=tk.DISABLED)
-button_speichern.grid(row=23, column=0, columnspan=2)
-
-root.mainloop()
+# PDF speichern Button
+button_speichern = st.button("Als PDF speichern", disabled=True)
