@@ -168,7 +168,7 @@ def berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutt
     print(f"Tabelle für Jahr {jahr}: {tabelle}")
     
     if altersgruppe_key not in tabelle:
-        ergebnis_var.set("Altersgruppe nicht gefunden")
+        st.warning("Altersgruppe nicht gefunden")
         return 0  # Standardwert zurückgeben
     
     altersgruppe = tabelle[altersgruppe_key]
@@ -187,9 +187,7 @@ def berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutt
         print(f"Prüfe Einkommensbereich: {lower} - {upper} für Einkommen {einkommen}")
         if lower <= einkommen <= upper:
             print(f"Passende Einkommensgruppe gefunden: {einkommensbereich}, Regelbedarf: {regelbedarf}")
-            ergebnis_var.set(f"Regelbedarf: {regelbedarf} €")
             return regelbedarf  # Rückgabe des Regelbedarfs
-    ergebnis_var.set("Keine passende Einkommensgruppe gefunden")
     return 0
 
 def get_kindergeld(jahr):
@@ -526,8 +524,6 @@ def berechne_und_zeige():
 
 
     kindergeld = get_kindergeld(jahr)
-    global kindergeld_empfaenger
-    kindergeld_empfaenger = kindergeld_var.get()
 
     
     global aktueller_anspruch, aktueller_rechenweg, aktuelle_eingaben
@@ -536,9 +532,8 @@ def berechne_und_zeige():
                                                                           sonderbedarf, sonderbez,
                                                                           kindergeld, kindergeld_empfaenger)
     aktuelle_eingaben = (monat, jahr, einkommen_mutter, einkommen_vater, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, kindergeld, kindergeld_empfaenger)
-    
-    label_ergebnis.config(text=f"{aktueller_rechenweg}")
-    button_speichern.config(state=tk.NORMAL)
+
+    st.write(f"{aktueller_rechenweg}")
 
 
 
@@ -635,11 +630,17 @@ ergebnis_var = ""
 # Werte bei Nichteingabe auf 0 setzen
 def get_float_or_zero(val):
     try:
-        val = val.replace(',', '.')  # Komma zu Punkt
-        return float(val) if val.strip() else 0.0
-    except ValueError:
+        if isinstance(val, (int, float)):
+            return float(val)
+        val = val.strip()
+        # deutsches Format: z. B. "1.234,56"
+        if ',' in val:
+            val = val.replace('.', '')    # Tausenderpunkt raus
+            val = val.replace(',', '.')   # Komma → Punkt
+        # englisches Format lassen wir durch
+        return float(val)
+    except (ValueError, AttributeError):
         return 0.0
-
 
 st.header("Eingaben Vater")
 
@@ -740,16 +741,21 @@ if zeige_sonderbedarf:
     sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
     sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value=80)
 
+global kindergeld_empfaenger
+kindergeld_empfaenger = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
 
-kindergeld_var = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
+if "berechnet" not in st.session_state:
+    st.session_state["berechnet"] = False
 
 # Berechnen Button
 if st.button("Berechnen"):
     berechne_und_zeige()
+    st.session_state["berechnet"] = True  # Merken, dass gerechnet wurde
 
 # Ergebnis-Label
 label_ergebnis = st.empty()  # Platzhalter für das Ergebnis
 label_ergebnis.text("")  # Anfangszustand leer
 
 # PDF speichern Button
-button_speichern = st.button("Als PDF speichern", disabled=True)
+if st.button("Als PDF speichern", disabled=not st.session_state["berechnet"]):
+    speichere_pdf
