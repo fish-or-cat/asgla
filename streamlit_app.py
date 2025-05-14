@@ -646,8 +646,22 @@ st.header("Eingaben Vater")
 
 haupttaetigkeit_vater_input = st.text_input("Haupttätigkeit Vater:", value="5000")
 weitere_einkuenfte_vater_input = st.text_input("Weitere Einkünfte Vater:", value="300")
-abzugsposten1_vater_input = st.text_input("Abzugsposten 1 Vater:", value="100")
-abzugsposten2_vater_input = st.text_input("Abzugsposten 2 Vater:", value="100")
+
+# Funktion zum Hinzufügen von Abzugsposten
+def add_abzugsposten():
+    if len(st.session_state.abzugsposten) < 5:  # Maximale Anzahl von Abzugsposten auf 5 setzen
+        st.session_state.abzugsposten.append("100")  # Neuen Abzugsposten hinzufügen
+    else:
+        st.warning("Es können maximal 5 Abzugsposten hinzugefügt werden!")
+
+# Abzugsposten anzeigen und Eingabefelder generieren
+for i, abzug in enumerate(st.session_state.abzugsposten):
+    st.session_state.abzugsposten[i] = st.text_input(f"Abzugsposten {i + 1} Vater:", value=abzug, key=f"abzug_{i}")
+
+# Button zum Hinzufügen eines weiteren Abzugspostens
+if st.button("Weitere Abzugsposten hinzufügen"):
+    add_abzugsposten()
+
 
 st.header("Eingaben Mutter")
 
