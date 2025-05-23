@@ -1,9 +1,13 @@
 import streamlit as st
+import tempfile
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from fpdf import FPDF
+from io import BytesIO
+from fpdf.enums import XPos, YPos
 
 # Düsseldorfer Tabelle als Dictionarys # Pflegebedarf
 duesseldorfer_tabellen = {
@@ -294,6 +298,33 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
             ausgleichsanspruch = auszugleichender_betrag - abzufuehrendes_kindergeld  # Kindergeld wird abgezogen
 
     print(f"Ausgleichsanspruch: {ausgleichsanspruch} EUR")
+
+    # für weitere Vorgänge bei streamlit übertragen
+    st.session_state.verteilbarer_betrag_mutter = verteilbarer_betrag_mutter
+    st.session_state.verteilbarer_betrag_vater = verteilbarer_betrag_vater
+    st.session_state.verteilbarer_betrag_gesamt = verteilbarer_betrag_gesamt
+    st.session_state.anteil_mutter = anteil_mutter
+    st.session_state.anteil_vater = anteil_vater
+    st.session_state.gesamtes_einkommen = gesamtes_einkommen
+    st.session_state.regelbedarf = regelbedarf
+    st.session_state.zusatzbedarf = zusatzbedarf
+    st.session_state.mehrbedarf = mehrbedarf
+    st.session_state.sonderbedarf = sonderbedarf
+    st.session_state.gesamtbedarf = gesamtbedarf
+    st.session_state.kindergeld = kindergeld
+    st.session_state.betreuungsanteil_mutter = betreuungsanteil_mutter
+    st.session_state.betreuungsanteil_vater = betreuungsanteil_vater
+    st.session_state.baranteil_mutter = baranteil_mutter
+    st.session_state.baranteil_vater = baranteil_vater
+    st.session_state.anteil_mutter_gesamtbedarf = anteil_mutter_gesamtbedarf
+    st.session_state.anteil_vater_gesamtbedarf = anteil_vater_gesamtbedarf
+    st.session_state.differenz_anteile = differenz_anteile
+    st.session_state.anspruchsberechtigt = anspruchsberechtigt
+    st.session_state.nicht_anspruchsberechtigt = nicht_anspruchsberechtigt
+    st.session_state.auszugleichender_betrag = auszugleichender_betrag
+    st.session_state.abzufuehrendes_kindergeld = abzufuehrendes_kindergeld
+    st.session_state.ausgleichsanspruch = ausgleichsanspruch
+    
     
     # Rechenweg schrittweise zusammenbauen
     rechenweg = []
@@ -318,238 +349,197 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     # In einzelnen String zusammenfassen
     return ausgleichsanspruch, "\n".join(rechenweg)
 
+class PDF(FPDF):
+    def header(self):
+        pass  # kein automatischer Header
 
-def erstelle_pdf(monat, jahr, einkommen_mutter, einkommen_vater, kindergeld, regelbedarf, mehrbedarf, mehrbez,
-                 sonderbedarf, sonderbez,
-                 anspruch, rechenweg, dateiname="Ausgleichsanspruch{monat}{jahr}.pdf"):
+    def chapter_title(self, title):
+        self.set_font('DejaVu', 'B', 14)
+        self.multi_cell(0, 10, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        self.ln(5)
 
-    doc = SimpleDocTemplate(dateiname, pagesize=A4)
-    styles = getSampleStyleSheet()
-    custom_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=14, spaceAfter=12)
+    def add_table(self, title, data, col_widths):
+        self.set_fill_color(220, 220, 220)
+        self.set_font("DejaVu", 'B', 12)
+        self.cell(sum(col_widths), 10, title, 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C', fill=True)
+        self.set_font("DejaVu", '', 11)
+        for row in data:
+            self.cell(col_widths[0], 8, row[0], border=1, align='L')
+            self.cell(col_widths[1], 8, row[1], border=1, align='R')
+            self.ln()
 
-    elements = []
-    title_text = ("Berechnung Ausgleichsanspruch im Wechselmodell<br/>"
-                  f"<b>{monat} {jahr}</b>")
-    custom_style.alignment = 1  # 1 steht für zentriert
-    elements.append(Paragraph(title_text, custom_style))
-    elements.append(Spacer(1, 12))
+    def add_paragraph(self, text):
+        self.set_font("DejaVu", '', 11)
+        self.multi_cell(0, 8, text)
+        self.ln(1)
 
-    # Tabelle mit den Berechnungswerten
+def erstelle_pdf():
+    dateiname="Ausgleichsanspruch{monat}{jahr}.pdf"
+
+    pdf = PDF()
+    pdf.add_page()
+    # 2) Unicode-fähige Schrift einbinden  ← HIER einfügen
+    pdf.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')        # normal
+    pdf.add_font('DejaVu', 'B', 'fonts/DejaVuSans-Bold.ttf')   # fett (bold)
+    pdf.add_font('DejaVu', 'I', 'fonts/DejaVuSans-Oblique.ttf') # kursiv (italic)
+    pdf.add_font('DejaVu', 'BI', 'fonts/DejaVuSans-BoldOblique.ttf') # fett+kursiv
+
+    pdf.set_font("DejaVu", size=12)
+
+    pdf.chapter_title(f"Berechnung Ausgleichsanspruch im Wechselmodell\n{monat} {jahr}")
+
+    # Tabelle Vater
     daten_vater = [
-        ["Einkommen", f"{einkommen_vater:.2f} €"],
-        ["Abzugsposten 1", f"{abzugsposten1_vater:.2f} €"],
-        ["Abzugsposten 2", f"{abzugsposten2_vater:.2f} €"],
-        ["Abzug Gesamt", f"{abzug_vater:.2f} €"],
-        ["= bereinigtes Einkommen", f"{bereinigtes_einkommen_vater:.2f} €"],
-        [f"./. Selbstbehalt", f"{sockelbetrag_vater:.2f} €"],
-        ["= verteilbarer Betrag", f"{verteilbarer_betrag_vater:.2f} €"],
+        ["Einkommen", f"{st.session_state.einkommen_vater:.2f} €"],
+        ["Abzugsposten 1", f"{st.session_state.abzugsposten1_vater:.2f} €"],
+        ["Abzugsposten 2", f"{st.session_state.abzugsposten2_vater:.2f} €"],
+        ["Abzug Gesamt", f"{st.session_state.abzug_vater:.2f} €"],
+        ["= bereinigtes Einkommen", f"{st.session_state.bereinigtes_einkommen_vater:.2f} €"],
+        ["./. Selbstbehalt", f"{sockelbetrag_vater:.2f} €"],
+        ["= verteilbarer Betrag", f"{st.session_state.verteilbarer_betrag_vater:.2f} €"]
     ]
+    pdf.add_table("Vater", daten_vater, [90, 50])
 
+    # Tabelle Mutter
     daten_mutter = [
-        ["Einkommen", f"{einkommen_mutter:.2f} €"],
-        ["Abzugsposten 1", f"{abzugsposten1_mutter:.2f} €"],
-        ["Abzugsposten 2", f"{abzugsposten2_mutter:.2f} €"],
-        ["Abzug Gesamt", f"{abzug_mutter:.2f} €"],
-        ["= bereinigtes Einkommen", f"{bereinigtes_einkommen_mutter:.2f} €"],
-        [f"./. Selbstbehalt", f"{sockelbetrag_mutter:.2f} €"],
-        ["= verteilbarer Betrag", f"{verteilbarer_betrag_mutter:.2f} €"],
+        ["Einkommen", f"{st.session_state.einkommen_mutter:.2f} €"],
+        ["Abzugsposten 1", f"{st.session_state.abzugsposten1_mutter:.2f} €"],
+        ["Abzugsposten 2", f"{st.session_state.abzugsposten2_mutter:.2f} €"],
+        ["Abzug Gesamt", f"{st.session_state.abzug_mutter:.2f} €"],
+        ["= bereinigtes Einkommen", f"{st.session_state.bereinigtes_einkommen_mutter:.2f} €"],
+        ["./. Selbstbehalt", f"{sockelbetrag_mutter:.2f} €"],
+        ["= verteilbarer Betrag", f"{st.session_state.verteilbarer_betrag_mutter:.2f} €"]
     ]
+    pdf.add_table("Mutter", daten_mutter, [90, 50])
 
+    pdf.add_paragraph(f"Für den Kindsvater wurde der {adjektiv_sockelbetrag_vater} Selbstbehalt berücksichtigt.")
+    pdf.add_paragraph(f"Für die Kindsmutter wurde der {adjektiv_sockelbetrag_mutter} Selbstbehalt berücksichtigt.")
+    pdf.add_paragraph(f"Relevantes Gesamteinkommen: {st.session_state.gesamtes_einkommen:.2f} €")
+    pdf.add_paragraph(f"Verteilbarer Betrag Gesamt: {st.session_state.verteilbarer_betrag_gesamt:.2f}")
+    pdf.add_paragraph(f"Haftungsanteil Mutter: {st.session_state.anteil_mutter:.2%}")
+    pdf.add_paragraph(f"Haftungsanteil Vater: {st.session_state.anteil_vater:.2%}")
 
+    # Tabelle Kind
+    daten_kind = [["Regelbedarf", f"{st.session_state.regelbedarf:.2f} €"]]
+    if st.session_state.zusatzbedarf > 0:
+        daten_kind.append(["Zusatzbedarf", f"{st.session_state.zusatzbedarf:.2f} €"])
+    if st.session_state.mehrbedarf > 0:
+        daten_kind.append([f"davon Mehrbedarf ({mehrbez})", f"{st.session_state.mehrbedarf:.2f} €"])
+    if st.session_state.sonderbedarf > 0:
+        daten_kind.append([f"davon Sonderbedarf ({sonderbez})", f"{st.session_state.sonderbedarf:.2f} €"])
+    daten_kind.append(["= Gesamtbedarf", f"{st.session_state.gesamtbedarf:.2f} €"])
+    daten_kind.append(["Kindergeld", f"{st.session_state.kindergeld:.2f} €"])
+    pdf.add_table("Angaben zum Kind", daten_kind, [90, 50])
 
-    daten_vater = [["Vater", ""]] + daten_vater
-    tabelle_vater = Table(daten_vater, colWidths=[120, 80])
-    tabelle_vater.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # damit die Zahlen rechts in der Zelle sind
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Kopfzeile zentrieren
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN', (0, 0), (-1, 0))  # Überschrift über beide Spalten spannen
-    ]))
+    pdf.add_paragraph(f"Anteil Mutter am Gesamtbedarf: {st.session_state.anteil_mutter_gesamtbedarf:.2f} €")
+    pdf.add_paragraph(f"Anteil Vater am Gesamtbedarf: {st.session_state.anteil_vater_gesamtbedarf:.2f} €")
+    pdf.add_paragraph(f"Differenz: {st.session_state.differenz_anteile:.2f} €")
+    pdf.add_paragraph(f"Auszugleichender Betrag (1/2) von {st.session_state.nicht_anspruchsberechtigt} zu leisten an {st.session_state.anspruchsberechtigt}: {st.session_state.auszugleichender_betrag:.2f} €")
 
-    daten_mutter = [["Mutter", ""]] + daten_mutter
-    tabelle_mutter = Table(daten_mutter, colWidths=[120, 80])
-    tabelle_mutter.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # damit die Zahlen rechts in der Zelle sind
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Kopfzeile zentrieren
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN', (0, 0), (-1, 0))  # Überschrift über beide Spalten spannen
-    ]))
-
-    tabelle_gesamt = Table([[tabelle_vater, tabelle_mutter]], colWidths=[220, 220])
-    tabelle_gesamt.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT')
-    ]))
-
-    elements.append(tabelle_gesamt) ## Einfügen der Eltern-Tabellen
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph(f"  Für den Kindsvater wurde der {adjektiv_sockelbetrag_vater} Selbstbehalt berücksichtigt", styles["Normal"]))
-    elements.append(Paragraph(f"  Für die Kindsmutter wurde der {adjektiv_sockelbetrag_mutter} Selbstbehalt berücksichtigt", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph(f"  relevantes Gesamteinkommen der Eltern für Regelbedarf: {gesamtes_einkommen:.2f} €", styles["Normal"]))
-    elements.append(Paragraph(f"  verteilbarer Betrag Gesamt: {verteilbarer_betrag_gesamt:.2f}", styles["Normal"]))
-    elements.append(Paragraph(f"  Haftungsanteil Mutter: {anteil_mutter:.2%}", styles["Normal"]))
-    elements.append(Paragraph(f"  Haftungsanteil Vater: {anteil_vater:.2%}", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    # Dynamische Kind-Tabelle ohne festen Zusatzbedarf
-    daten_kind = [["Angaben zum Kind", ""]]
-    daten_kind.append(["Regelbedarf", f"{regelbedarf:.2f} €"])
-    if zusatzbedarf > 0:
-        daten_kind.append([f"Zusatzbedarf", f"{zusatzbedarf:.2f} €"])
-    if mehrbedarf > 0:
-        daten_kind.append([f"   davon Mehrbedarf ({mehrbez})", f"{mehrbedarf:.2f} €"])
-    if sonderbedarf > 0:
-        daten_kind.append([f"   davon Sonderbedarf ({sonderbez})", f"{sonderbedarf:.2f} €"])
-    daten_kind.append(["= Gesamtbedarf", f"{gesamtbedarf:.2f} €"])
-    daten_kind.append(["Kindergeld", f"{kindergeld:.2f} €"])
-
-    # Erstelle und style Tabelle
-    tabelle_gesamt_kind = Table(daten_kind, colWidths=[200, 100], hAlign='LEFT')
-    tabelle_gesamt_kind.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR',  (0, 0), (-1, 0), colors.black),
-        ('ALIGN',      (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN',      (1, 0), (1, -1), 'RIGHT'),
-        ('ALIGN',      (0, 0), (-1, 0), 'CENTER'),
-        ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING',(0, 0),(-1, 0), 12),
-        ('GRID',       (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN',       (0, 0), (-1, 0))
-    ]))
-
-    elements.append(tabelle_gesamt_kind)
-    elements.append(Spacer(1, 12))
-
-    elements.append(Paragraph(f"  Anteil Mutter am Gesamtbedarf: {anteil_mutter_gesamtbedarf:.2f} €", styles["Normal"]))
-    elements.append(Paragraph(f"  Anteil Vater am Gesamtbedarf: {anteil_vater_gesamtbedarf:.2f} €", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"  Differenz: {differenz_anteile:.2f} €", styles["Normal"]))
-    elements.append(Paragraph(f"  Auszugleichender Betrag (1/2) von {nicht_anspruchsberechtigt} zu leisten an {anspruchsberechtigt}: {auszugleichender_betrag:.2f} €", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-    
-    daten_kindergeldverrechnung = [
-        ["Betreuungsanteil Mutter", f"{betreuungsanteil_mutter:.2f} €"],
-        ["Baranteil Mutter", f"{baranteil_mutter:.2f} €"],
-        ["Betreuungsanteil Vater", f"{betreuungsanteil_vater:.2f} €"],
-        ["Baranteil Vater", f"{baranteil_vater:.2f} €"],
-        ["Kindergeldempfänger", f"{kindergeld_empfaenger}"],
+    # Kindergeldverrechnung
+    daten_kg = [
+        ["Betreuungsanteil Mutter", f"{st.session_state.betreuungsanteil_mutter:.2f} €"],
+        ["Baranteil Mutter", f"{st.session_state.baranteil_mutter:.2f} €"],
+        ["Betreuungsanteil Vater", f"{st.session_state.betreuungsanteil_vater:.2f} €"],
+        ["Baranteil Vater", f"{st.session_state.baranteil_vater:.2f} €"],
+        ["Kindergeldempfänger", kindergeld_empfaenger]
     ]
+    pdf.add_table("Kindergeldverrechnung", daten_kg, [90, 50])
 
-    daten_kindergeldverrechnung = [["Kindergeldverrechnung", ""]] + daten_kindergeldverrechnung
-    tabelle_kindergeldverrechnung = Table(daten_kindergeldverrechnung, colWidths=[150, 100])
-    tabelle_kindergeldverrechnung.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # damit die Zahlen rechts in der Zelle sind
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Kopfzeile zentrieren
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN', (0, 0), (-1, 0))  # Überschrift über beide Spalten spannen
-    ]))
+    pdf.add_paragraph(f"  Ausgleichsanspruch von {st.session_state.anspruchsberechtigt} gegen {st.session_state.nicht_anspruchsberechtigt}: {st.session_state.ausgleichsanspruch:.2f} €")
 
-    tabelle_gesamt_kindergeldverrechnung = Table([[tabelle_kindergeldverrechnung]])
-    tabelle_gesamt.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT')
-    ]))
-
-    elements.append(tabelle_gesamt_kindergeldverrechnung) ## Einfügen der Kindergeldverrechnung als Tabelle
-    elements.append(Spacer(1, 12))
-
-    elements.append(Paragraph(f"  Ausgleichsanspruch von {anspruchsberechtigt} gegen {nicht_anspruchsberechtigt}: {ausgleichsanspruch:.2f} €", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    doc.build(elements)
-    print(f"PDF {dateiname} erfolgreich erstellt!")
-    return dateiname
+        # PDF in einen BytesIO-Buffer schreiben:
+    pdf_buffer = BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)  # Zeiger an den Anfang setzen!
+    return pdf_buffer
 
 def berechne_und_zeige():
-    # Berechnung des Einkommens der Mutter und des Vaters
+
+    st.session_state.monat = monat
+    st.session_state.jahr = jahr
 
     # Mutter
-    haupttaetigkeit_mutter = get_float_or_zero(haupttaetigkeit_mutter_input)
-    weitere_einkuenfte_mutter = get_float_or_zero(weitere_einkuenfte_mutter_input)
-    einkommen_mutter = haupttaetigkeit_mutter + weitere_einkuenfte_mutter
+    st.session_state.haupttaetigkeit_mutter = get_float_or_zero(haupttaetigkeit_mutter_input)
+    st.session_state.weitere_einkuenfte_mutter = get_float_or_zero(weitere_einkuenfte_mutter_input)
+    st.session_state.einkommen_mutter = st.session_state.haupttaetigkeit_mutter + st.session_state.weitere_einkuenfte_mutter
 
-    global abzugsposten1_mutter, abzugsposten2_mutter, abzug_mutter
-    abzugsposten1_mutter = get_float_or_zero(abzugsposten1_mutter_input)
-    abzugsposten2_mutter = get_float_or_zero(abzugsposten2_mutter_input)
-    abzug_mutter = abzugsposten1_mutter + abzugsposten2_mutter
+    st.session_state.abzugsposten1_mutter = get_float_or_zero(abzugsposten1_mutter_input)
+    st.session_state.abzugsposten2_mutter = get_float_or_zero(abzugsposten2_mutter_input)
+    st.session_state.abzug_mutter = st.session_state.abzugsposten1_mutter + st.session_state.abzugsposten2_mutter
 
-    bereinigtes_einkommen_mutter = einkommen_mutter - abzug_mutter
+    st.session_state.bereinigtes_einkommen_mutter = st.session_state.einkommen_mutter - st.session_state.abzug_mutter
 
     # Vater
-    haupttaetigkeit_vater = get_float_or_zero(haupttaetigkeit_vater_input)
-    weitere_einkuenfte_vater = get_float_or_zero(weitere_einkuenfte_vater_input)
-    einkommen_vater = haupttaetigkeit_vater + weitere_einkuenfte_vater
+    st.session_state.haupttaetigkeit_vater = get_float_or_zero(haupttaetigkeit_vater_input)
+    st.session_state.weitere_einkuenfte_vater = get_float_or_zero(weitere_einkuenfte_vater_input)
+    st.session_state.einkommen_vater = st.session_state.haupttaetigkeit_vater + st.session_state.weitere_einkuenfte_vater
 
-    global abzugsposten1_vater, abzugsposten2_vater, abzug_vater
-    abzugsposten1_vater = get_float_or_zero(abzugsposten1_vater_input)
-    abzugsposten2_vater = get_float_or_zero(abzugsposten2_vater_input)
-    abzug_vater = abzugsposten1_vater + abzugsposten2_vater
+    st.session_state.abzugsposten1_vater = get_float_or_zero(abzugsposten1_vater_input)
+    st.session_state.abzugsposten2_vater = get_float_or_zero(abzugsposten2_vater_input)
+    st.session_state.abzug_vater = st.session_state.abzugsposten1_vater + st.session_state.abzugsposten2_vater
 
-    bereinigtes_einkommen_vater = einkommen_vater - abzug_vater
+    st.session_state.bereinigtes_einkommen_vater = st.session_state.einkommen_vater - st.session_state.abzug_vater
 
-    ## BEDARF Kind
-    alter = alter_kind or 0  # Zum Beispiel vom Benutzer eingegeben
+    # Bedarf Kind
+    alter = alter_kind or 0  # Eingabe durch Nutzer
 
-    global mehrbedarf, sonderbedarf
-    mehrbedarf = 0; mehrbez = ''
+    st.session_state.mehrbedarf = 0
+    st.session_state.mehrbez = ''
     if zeige_mehrbedarf:
-        mehrbedarf = get_float_or_zero(mehrbetrag)
-        mehrbez = mehrbez or 'Mehrbedarf'
-    sonderbedarf = 0; sonderbez = ''
+        st.session_state.mehrbedarf = get_float_or_zero(mehrbetrag)
+        st.session_state.mehrbez = mehrbez or 'Mehrbedarf'
+
+    st.session_state.sonderbedarf = 0
+    st.session_state.sonderbez = ''
     if zeige_sonderbedarf:
-        sonderbedarf = get_float_or_zero(sonderbetrag)
-        sonderbez = sonderbez or 'Sonderbedarf'
+        st.session_state.sonderbedarf = get_float_or_zero(sonderbetrag)
+        st.session_state.sonderbez = sonderbez or 'Sonderbedarf'
 
-    # Berechnung des Bedarfs des Kindes mit der Düsseldorfer Tabelle
-    regelbedarf = berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutter, alter, jahr)
+    # Regelbedarf berechnen
+    st.session_state.regelbedarf = berechne_regelbedarf(
+        st.session_state.bereinigtes_einkommen_vater,
+        st.session_state.bereinigtes_einkommen_mutter,
+        alter,
+        jahr
+    )
 
-    # Ausgabe des Bedarfs
-    print(f"Regelbedarf des Kindes: {regelbedarf} EUR")
+    st.write(f"Regelbedarf des Kindes: {st.session_state.regelbedarf} EUR")
 
+    st.session_state.kindergeld = get_kindergeld(jahr)
 
-    kindergeld = get_kindergeld(jahr)
+    # Ausgleichsanspruch berechnen
+    st.session_state.aktueller_anspruch, st.session_state.aktueller_rechenweg = berechne_ausgleichsanspruch(
+        monat,
+        jahr,
+        st.session_state.einkommen_mutter,
+        st.session_state.einkommen_vater,
+        st.session_state.abzug_mutter,
+        st.session_state.abzug_vater,
+        st.session_state.regelbedarf,
+        st.session_state.mehrbedarf,
+        st.session_state.mehrbez,
+        st.session_state.sonderbedarf,
+        st.session_state.sonderbez,
+        st.session_state.kindergeld,
+        kindergeld_empfaenger
+    )
 
-    
-    global aktueller_anspruch, aktueller_rechenweg, aktuelle_eingaben
-    aktueller_anspruch, aktueller_rechenweg = berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater,
-                                                                          abzug_mutter, abzug_vater, regelbedarf, mehrbedarf, mehrbez,
-                                                                          sonderbedarf, sonderbez,
-                                                                          kindergeld, kindergeld_empfaenger)
-    aktuelle_eingaben = (monat, jahr, einkommen_mutter, einkommen_vater, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, kindergeld, kindergeld_empfaenger)
+    st.session_state.aktuelle_eingaben = (
+        monat,
+        jahr,
+        st.session_state.einkommen_mutter,
+        st.session_state.einkommen_vater,
+        st.session_state.regelbedarf,
+        st.session_state.mehrbedarf,
+        st.session_state.mehrbez,
+        st.session_state.sonderbedarf,
+        st.session_state.sonderbez,
+        st.session_state.kindergeld,
+        kindergeld_empfaenger
+    )
 
-    st.write(f"{aktueller_rechenweg}")
-
-
-
-def speichere_pdf():
-    if aktueller_anspruch is not None:
-        monat, jahr, einkommen_mutter, einkommen_vater, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, kindergeld, kindergeld_empfaenger = aktuelle_eingaben
-        vorschlag_dateiname = f"Ausgleichsanspruch_{monat}_{jahr}.pdf"
-        dateiname = filedialog.asksaveasfilename(
-            defaultextension=".pdf",
-            filetypes=[("PDF files", "*.pdf")],
-            initialfile=vorschlag_dateiname  # Hier wird der Standardname gesetzt
-        )
-        if dateiname:
-            erstelle_pdf(monat, jahr, einkommen_mutter, einkommen_vater, kindergeld, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, aktueller_anspruch,
-                         aktueller_rechenweg, dateiname)
-            label_ergebnis.config(text=f"PDF gespeichert: {dateiname}\n\n\n{aktueller_rechenweg}")
+    st.write(st.session_state.aktueller_rechenweg)
 
 
 # Funktion für die Bestätigung
@@ -757,5 +747,10 @@ label_ergebnis = st.empty()  # Platzhalter für das Ergebnis
 label_ergebnis.text("")  # Anfangszustand leer
 
 # PDF speichern Button
-if st.button("Als PDF speichern", disabled=not st.session_state["berechnet"]):
-    speichere_pdf
+if st.session_state["berechnet"]:
+    st.download_button(
+        label="PDF herunterladen",
+        data=erstelle_pdf(),
+        file_name=f"Ausgleichsanspruch_{st.session_state.monat}_{st.session_state.jahr}.pdf",
+        mime="application/pdf"
+    )
