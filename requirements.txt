@@ -1,2 +1,5 @@
 streamlit
+pyarrow
+pandas
 reportlab
+fpdf2
