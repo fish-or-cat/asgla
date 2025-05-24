@@ -151,7 +151,7 @@ SELBSTBEHALTE = {
 }
 
 def berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutter, alter, jahr):
-    global ergebnis_var 
+
     einkommen = bereinigtes_einkommen_vater + bereinigtes_einkommen_mutter
 
     # Bestimme die Altersgruppe anhand des Alters
@@ -542,7 +542,7 @@ def berechne_und_zeige():
     st.write(st.session_state.aktueller_rechenweg)
 
 
-# Funktion für die Bestätigung
+# Funktion für die Bestätigung beim Sockelbetrag
 def bestaetigen(elternteil, auswahl, flag, custom_betrag=None):
     neuer_betrag = None
     if auswahl == "angemessen":
@@ -594,27 +594,19 @@ def oeffne_auswahlfenster_sockelbetrag(elternteil):
 
 
 
+# GUI ANFANG #
 # Titel und feste "Fenstergröße" (Streamlit ist responsiv, aber wir können die Breite anpassen)
 st.set_page_config(page_title="Ausgleichsanspruch Wechselmodell", layout="wide")
 
 st.title("Ausgleichsanspruch Wechselmodell")
 
-# Scrollbar in Streamlit ist automatisch, keine Canvas nötig
-
-# Monat und Jahr Dropdowns
-monate = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
-jahre = ["2025", "2024", "2023"]
-
-col1, col2 = st.columns(2)
-
-# Monat Dropdown
-monat = col1.selectbox("Monat:", monate, index=0)  # Standardwert = Januar
-
-# Jahr Dropdown
-jahr = col2.selectbox("Jahr:", jahre, index=0)  # Standardwert = 2025
-
-# Ergebnis-Variable (wie tk.StringVar)
-ergebnis_var = ""
+# Jahr/Monat Auswahl
+col_jahr, col_monat = st.columns(2)
+jahr = col_jahr.selectbox("📆 Jahr", list(SELBSTBEHALTE.keys()), index=0)
+monat = col_monat.selectbox("📅 Monat", [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember"
+], index=0)
 
 
 # Werte bei Nichteingabe auf 0 setzen
@@ -632,107 +624,150 @@ def get_float_or_zero(val):
     except (ValueError, AttributeError):
         return 0.0
 
-st.header("Eingaben Vater")
+# Session-State initialisieren
+for p in ["vater", "mutter"]:
+    if f"sockel_amt_{p}" not in st.session_state:
+        st.session_state[f"sockel_amt_{p}"] = SELBSTBEHALTE[jahr]["angemessen"]
+        st.session_state[f"sockel_lbl_{p}"] = "angemessene"
+    if f"edit_{p}" not in st.session_state:
+        st.session_state[f"edit_{p}"] = False
 
-haupttaetigkeit_vater_input = st.text_input("Haupttätigkeit Vater:", value="5000")
-weitere_einkuenfte_vater_input = st.text_input("Weitere Einkünfte Vater:", value="300")
-abzugsposten1_vater_input = st.text_input("Abzugsposten 1 Vater:", value="100")
-abzugsposten2_vater_input = st.text_input("Abzugsposten 2 Vater:", value="100")
+# Wenn Jahr gewechselt wurde: Sockel auf Standard zurücksetzen
+if st.session_state.get("jahr_prev") != jahr:
+    for p in ["vater","mutter"]:
+        st.session_state[f"sockel_amt_{p}"] = SELBSTBEHALTE[jahr]["angemessen"]
+        st.session_state[f"sockel_lbl_{p}"] = "angemessene"
+    st.session_state["jahr_prev"] = jahr
 
-st.header("Eingaben Mutter")
+st.markdown("––––––––––––––––––––––––––")
 
-haupttaetigkeit_mutter_input = st.text_input("Haupttätigkeit Mutter:", value="1500")
-weitere_einkuenfte_mutter_input = st.text_input("Weitere Einkünfte Mutter:", value="100")
-abzugsposten1_mutter_input = st.text_input("Abzugsposten 1 Mutter:", value="100")
-abzugsposten2_mutter_input = st.text_input("Abzugsposten 2 Mutter:", value="100")
+# Helper-Funktion: Sockel-Auswahl-Expander
+```
+# Form innerhalb des Expanders, sorgt dafür, dass der Bestätigen-Button beim ersten Klick greift
+def sockel_expander(elternteil):
+    form_key = f"form_{elternteil}"
+    with st.form(form_key):
+        # Radio und Checkbox nebeneinander
+        col1, col2 = st.columns([3,1])
+        with col1:
+            auswahl = st.radio(
+                "Bitte Sockelbetrag auswählen:",
+                ["angemessen","notwendig","custom"],
+                key=f"rad_{elternteil}"
+            )
+        with col2:
+            flag = False
+            if auswahl == "notwendig":
+                flag = st.checkbox(
+                    "nicht erw.",
+                    key=f"chk_{elternteil}_nicht"
+                )
+        # Custom-Betrag
+        custom = None
+        if auswahl == "custom":
+            custom = st.number_input(
+                "Benutzerdefinierter Betrag (€):", min_value=0.0,
+                key=f"num_{elternteil}_custom"
+            )
+        # Submit-Button
+        submitted = st.form_submit_button("Bestätigen")
+        if submitted:
+            if auswahl == "angemessen":
+                amt = SELBSTBEHALTE[jahr]["angemessen"]
+                lbl = "angemessene"
+            elif auswahl == "notwendig":
+                key_sb = "notwendig_nicht_erwerbstätig" if flag else "notwendig_erwerbstätig"
+                amt = SELBSTBEHALTE[jahr][key_sb]
+                lbl = f"notwendige ({'nicht ' if flag else ''}erwerbstätig)"
+            else:
+                amt = custom or 0.0
+                lbl = "benutzerdefinierte"
+            st.session_state[f"sockel_amt_{elternteil}"] = amt
+            st.session_state[f"sockel_lbl_{elternteil}"] = lbl
+            st.session_state[f"edit_{elternteil}"] = False
+```
 
-
-
-### Zum Kind
-alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
-
-
-# SOCKELBETRAG
-jahr = jahre[0]
-var_sockel_vater = "angemessen"
-var_sockel_mutter = "angemessen"
-nicht_erwerbstätig_vater = 0
-nicht_erwerbstätig_mutter = 0
-sockelbetrag_vater = SELBSTBEHALTE[jahr]['angemessen']
-sockelbetrag_mutter = SELBSTBEHALTE[jahr]['angemessen']
-auswahl_vater = None
-auswahl_mutter = None
-rette_sockelbetrag_vater = None
-rette_sockelbetrag_mutter = None
-adjektiv_sockelbetrag_mutter = "angemessene"
-adjektiv_sockelbetrag_vater = "angemessene"
-
-# Funktion, die bei Änderung des Jahres aufgerufen wird
-def jahr_geaendert(jahr):
-    global sockelbetrag_vater, sockelbetrag_mutter, auswahl_vater, auswahl_mutter
-
-    # Update für den Vater
-    if rette_sockelbetrag_vater is not None:
-        sockelbetrag_vater = rette_sockelbetrag_vater
-    else:
-        if auswahl_vater == "angemessen":
-            sockelbetrag_vater = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl_vater == "notwendig":
-            sockelbetrag_vater = SELBSTBEHALTE[jahr]["notwendig_erwerbstätig"]  # Beispiel, kann weiter angepasst werden
-        else:  # custom
-            sockelbetrag_vater = sockelbetrag_vater  # bleibt gleich
-
-    # Update für die Mutter
-    if rette_sockelbetrag_mutter is not None:
-        sockelbetrag_mutter = rette_sockelbetrag_mutter
-    else:
-        if auswahl_mutter == "angemessen":
-            sockelbetrag_mutter = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl_mutter == "notwendig":
-            sockelbetrag_mutter = SELBSTBEHALTE[jahr]["notwendig_erwerbstätig"]  # Beispiel, kann weiter angepasst werden
-        else:  # custom
-            sockelbetrag_mutter = sockelbetrag_mutter  # bleibt gleich
-
-    # Anzeige der Ergebnisse
-    st.write(f"Für den Kindsvater wird der {auswahl_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-    st.write(f"Für die Kindsmutter wird der {auswahl_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-def aendere_sockelbetrag_vater():
-    oeffne_auswahlfenster_sockelbetrag("vater")
-
-# Callback für Mutter-Änderung
-def aendere_sockelbetrag_mutter():
-    oeffne_auswahlfenster_sockelbetrag("mutter")
-
-label_sockel_vater = st.write(f"Für den Kindsvater wird der angemessene Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-if st.button("Ändern", key="btn_aendere_sockelbetrag_vater"):
-    aendere_sockelbetrag_vater()
-
-label_sockel_mutter = st.write(f"Für die Kindsmutter wird der angemessene Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-if st.button("Ändern", key="btn_aendere_sockelbetrag_mutter"):
-    aendere_sockelbetrag_mutter()
-
-jahr_geaendert(jahr)
+##Obercontainer in dem die Tabs sind für Übersichtlichkeit
+with st.container():
+    tabs = st.tabs(["👨 Einkünfte Vater", "👩 Einkünfte Mutter", "👶 Bedarf Kind"])
 
 
-# Checkbox: Mehrbedarf
-zeige_mehrbedarf = st.checkbox("Mehrbedarf hinzufügen", value=True)
+    # --- TAB 1: EINKÜNFTE VATER ---
+    with tabs[0]:
+        st.subheader("Vater – Einkünfte und Abzüge")
 
-if zeige_mehrbedarf:
-    mehrbez = st.text_input("Bezeichnung Mehrbedarf", value="Hort")
-    mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value=60)
+        col_einkünfte, col_abzüge = st.columns(2)
 
-# Checkbox: Sonderbedarf
-zeige_sonderbedarf = st.checkbox("Sonderbedarf hinzufügen", value=True)
+        with col_einkünfte:
+            st.markdown("### Einkünfte")
+            haupttaetigkeit_vater_input = st.text_input("Haupttätigkeit Vater:", value="5000")
+            weitere_einkuenfte_vater_input = st.text_input("Weitere Einkünfte Vater:", value="300")
 
-if zeige_sonderbedarf:
-    sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
-    sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value=80)
+        with col_abzüge:
+            st.markdown("### Abzüge")
+            abzugsposten1_vater_input = st.text_input("Abzugsposten 1 Vater:", value="100")
+            abzugsposten2_vater_input = st.text_input("Abzugsposten 2 Vater:", value="100")
 
-global kindergeld_empfaenger
-kindergeld_empfaenger = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
+        # Aktueller Sockelbetrag
+        st.info(f"Für den Kindsvater wird der **{st.session_state['sockel_lbl_vater']}** Selbstbehalt "
+                f"von **{st.session_state['sockel_amt_vater']:.2f} €** berücksichtigt. (Jahr: {jahr})")
+
+        if st.button("Ändern", key="btn_edit_vater"):
+            st.session_state["edit_vater"] = True
+        if st.session_state["edit_vater"]:
+            with st.expander("Sockelbetrag anpassen", expanded=True):
+                sockel_expander("vater")
+
+    # --- TAB 2: EINKÜNFTE MUTTER ---
+    with tabs[1]:
+        st.subheader("Mutter – Einkünfte und Abzüge")
+
+        col_einkünfte, col_abzüge = st.columns(2)
+
+        with col_einkünfte:
+            st.markdown("### Einkünfte")
+            haupttaetigkeit_mutter_input = st.text_input("Haupttätigkeit Mutter:", value="2500")
+            weitere_einkuenfte_mutter_input = st.text_input("Weitere Einkünfte Mutter:", value="100")
+
+        with col_abzüge:
+            st.markdown("### Abzüge")
+            abzugsposten1_mutter_input = st.text_input("Abzugsposten 1 Mutter:", value="100")
+            abzugsposten2_mutter_input = st.text_input("Abzugsposten 2 Mutter:", value="100")
+
+        st.info(f"Für die Kindsmutter wird der **{st.session_state['sockel_lbl_mutter']}** Selbstbehalt "
+                f"von **{st.session_state['sockel_amt_mutter']:.2f} €** berücksichtigt. (Jahr: {jahr})")
+
+        if st.button("Ändern", key="btn_edit_mutter"):
+            st.session_state["edit_mutter"] = True
+        if st.session_state["edit_mutter"]:
+            with st.expander("Sockelbetrag anpassen", expanded=True):
+                sockel_expander("mutter")
+
+    # --- TAB 3: BEDARF KIND ---
+    with tabs[2]:
+        st.subheader("Bedarf Kind")
+
+        ### Zum Kind
+        alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
+
+        # Checkbox: Mehrbedarf
+        zeige_mehrbedarf = st.checkbox("Mehrbedarf hinzufügen", value=True)
+
+        if zeige_mehrbedarf:
+            mehrbez = st.text_input("Bezeichnung Mehrbedarf", value="Hort")
+            mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value=60)
+
+        # Checkbox: Sonderbedarf
+        zeige_sonderbedarf = st.checkbox("Sonderbedarf hinzufügen", value=True)
+
+        if zeige_sonderbedarf:
+            sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
+            sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value=80)
+
+        global kindergeld_empfaenger
+        kindergeld_empfaenger = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
+
+st.markdown("––––––––––––––––––––––––––")
 
 if "berechnet" not in st.session_state:
     st.session_state["berechnet"] = False
