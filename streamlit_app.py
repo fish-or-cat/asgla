@@ -642,7 +642,6 @@ if st.session_state.get("jahr_prev") != jahr:
 st.markdown("––––––––––––––––––––––––––")
 
 # Helper-Funktion: Sockel-Auswahl-Expander
-```
 # Form innerhalb des Expanders, sorgt dafür, dass der Bestätigen-Button beim ersten Klick greift
 def sockel_expander(elternteil):
     form_key = f"form_{elternteil}"
@@ -685,7 +684,6 @@ def sockel_expander(elternteil):
             st.session_state[f"sockel_amt_{elternteil}"] = amt
             st.session_state[f"sockel_lbl_{elternteil}"] = lbl
             st.session_state[f"edit_{elternteil}"] = False
-```
 
 ##Obercontainer in dem die Tabs sind für Übersichtlichkeit
 with st.container():
