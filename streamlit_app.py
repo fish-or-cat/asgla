@@ -542,58 +542,6 @@ def berechne_und_zeige():
     st.write(st.session_state.aktueller_rechenweg)
 
 
-# Funktion für die Bestätigung beim Sockelbetrag
-def bestaetigen(elternteil, auswahl, flag, custom_betrag=None):
-    neuer_betrag = None
-    if auswahl == "angemessen":
-        neuer_betrag = SELBSTBEHALTE[jahr]["angemessen"]
-    elif auswahl == "notwendig":
-        key = "notwendig_nicht_erwerbstätig" if flag else "notwendig_erwerbstätig"
-        neuer_betrag = SELBSTBEHALTE[jahr][key]
-    elif auswahl == "custom":
-        try:
-            neuer_betrag = float(custom_betrag)
-        except ValueError:
-            st.error("Bitte eine gültige Zahl eingeben.")
-            return
-    else:
-        return
-    
-    # Sockelbetrag speichern
-    if elternteil == "vater":
-        global sockelbetrag_vater, adjektiv_sockelbetrag_vater
-        sockelbetrag_vater = neuer_betrag
-        adjektiv_sockelbetrag_vater = "angemessen" if auswahl == "angemessen" else "notwendig (nicht erwerbstätig)" if flag else "notwendig (erwerbstätig)" if auswahl == "notwendig" else "benutzerdefiniert"
-        st.write(f"Für den Kindsvater wird der {adjektiv_sockelbetrag_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-    elif elternteil == "mutter":
-        global sockelbetrag_mutter, adjektiv_sockelbetrag_mutter
-        sockelbetrag_mutter = neuer_betrag
-        adjektiv_sockelbetrag_mutter = "angemessen" if auswahl == "angemessen" else "notwendig (nicht erwerbstätig)" if flag else "notwendig (erwerbstätig)" if auswahl == "notwendig" else "benutzerdefiniert"
-        st.write(f"Für die Kindsmutter wird der {adjektiv_sockelbetrag_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-# Auswahlfenster für den Sockelbetrag
-def oeffne_auswahlfenster_sockelbetrag(elternteil):
-    # Auswahlmöglichkeiten für den Sockelbetrag
-    auswahl = st.radio("Bitte Sockelbetrag auswählen:", 
-                       options=["angemessen", "notwendig", "custom"])
-    
-    if auswahl == "notwendig":
-        # Dynamische Checkbox für Erwerbstätigkeit
-        flag = st.checkbox(f"Nicht erwerbstätig ({SELBSTBEHALTE[jahr]['notwendig_nicht_erwerbstätig']} €)")
-    else:
-        flag = False
-
-    if auswahl == "custom":
-        custom_betrag = st.number_input("Eigener Betrag (€):")
-    else:
-        custom_betrag = None
-
-    # Bestätigungsbutton
-    if st.button("Bestätigen"):
-        bestaetigen(elternteil, auswahl, flag, custom_betrag)
-
-
-
 # GUI ANFANG #
 # Titel und feste "Fenstergröße" (Streamlit ist responsiv, aber wir können die Breite anpassen)
 st.set_page_config(page_title="Ausgleichsanspruch Wechselmodell", layout="wide")
@@ -642,44 +590,52 @@ if st.session_state.get("jahr_prev") != jahr:
 st.markdown("––––––––––––––––––––––––––")
 
 # Helper-Funktion: Sockel-Auswahl-Expander
+
 # Form innerhalb des Expanders, sorgt dafür, dass der Bestätigen-Button beim ersten Klick greift
 def sockel_expander(elternteil):
-    form_key = f"form_{elternteil}"
-    with st.form(form_key):
-        # Radio und Checkbox nebeneinander
-        col1, col2 = st.columns([3,1])
-        with col1:
-            auswahl = st.radio(
-                "Bitte Sockelbetrag auswählen:",
-                ["angemessen","notwendig","custom"],
-                key=f"rad_{elternteil}"
+    radio_key = f"rad_{elternteil}"
+    checkbox_key = f"chk_{elternteil}_nicht"
+    custom_key = f"num_{elternteil}_custom"
+
+    # Radio und dynamische Felder außerhalb der Form, damit sie sofort reagieren
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        auswahl = st.radio(
+            "Bitte Sockelbetrag auswählen:",
+            ["angemessen", "notwendig", "benutzerdefiniert"],
+            key=radio_key
+        )
+    with col2:
+        flag = None
+        if auswahl == "notwendig":
+            flag = st.checkbox(
+                "nicht erw.",
+                key=checkbox_key
             )
-        with col2:
-            flag = False
-            if auswahl == "notwendig":
-                flag = st.checkbox(
-                    "nicht erw.",
-                    key=f"chk_{elternteil}_nicht"
-                )
-        # Custom-Betrag
-        custom = None
-        if auswahl == "custom":
-            custom = st.number_input(
-                "Benutzerdefinierter Betrag (€):", min_value=0.0,
-                key=f"num_{elternteil}_custom"
-            )
-        # Submit-Button
+
+    custom = None
+    if auswahl == "benutzerdefiniert":
+        custom = st.number_input(
+            "Benutzerdefinierter Betrag (€):", min_value=0.0,
+            key=custom_key
+        )
+
+    # Form nur für den Button
+    with st.form(f"form_{elternteil}"):
         submitted = st.form_submit_button("Bestätigen")
         if submitted:
             if auswahl == "angemessen":
                 amt = SELBSTBEHALTE[jahr]["angemessen"]
                 lbl = "angemessene"
             elif auswahl == "notwendig":
-                key_sb = "notwendig_nicht_erwerbstätig" if flag else "notwendig_erwerbstätig"
+                # Falls Checkbox noch nicht gesetzt wurde, auf False zurückfallen
+                is_nicht = st.session_state.get(checkbox_key, False)
+                key_sb = "notwendig_nicht_erwerbstätig" if is_nicht else "notwendig_erwerbstätig"
                 amt = SELBSTBEHALTE[jahr][key_sb]
-                lbl = f"notwendige ({'nicht ' if flag else ''}erwerbstätig)"
+                lbl = f"notwendige ({'nicht ' if is_nicht else ''}erwerbstätig)"
             else:
-                amt = custom or 0.0
+                # Falls Feld noch leer: 0.0 verwenden
+                amt = st.session_state.get(custom_key, 0.0)
                 lbl = "benutzerdefinierte"
             st.session_state[f"sockel_amt_{elternteil}"] = amt
             st.session_state[f"sockel_lbl_{elternteil}"] = lbl
