@@ -217,15 +217,16 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     # Gesamteinkommen beider Eltern
     global gesamtes_einkommen
     gesamtes_einkommen = bereinigtes_einkommen_mutter + bereinigtes_einkommen_vater
-    
-    sockelbetrag_mutter = st.session_state.get("sockel_amt_mutter", 0.0)
-    adjektiv_sockelbetrag_mutter = st.session_state.get("sockel_lbl_mutter", "angemessene")
-    sockelbetrag_vater = st.session_state.get("sockel_amt_vater", 0.0)
-    adjektiv_sockelbetrag_vater = st.session_state.get("sockel_lbl_vater", "angemessene")
+
+    st.session_state.sockelbetrag_mutter = st.session_state.get("sockel_amt_mutter", 0.0)
+    st.session_state.adjektiv_sockelbetrag_mutter = st.session_state.get("sockel_lbl_mutter", "angemessene")
+    st.session_state.sockelbetrag_vater = st.session_state.get("sockel_amt_vater", 0.0)
+    st.session_state.adjektiv_sockelbetrag_vater = st.session_state.get("sockel_lbl_vater", "angemessene")
+
     
     global verteilbarer_betrag_mutter, verteilbarer_betrag_vater
-    verteilbarer_betrag_mutter = bereinigtes_einkommen_mutter - sockelbetrag_mutter
-    verteilbarer_betrag_vater = bereinigtes_einkommen_vater - sockelbetrag_vater
+    verteilbarer_betrag_mutter = bereinigtes_einkommen_mutter - st.session_state.sockelbetrag_mutter
+    verteilbarer_betrag_vater = bereinigtes_einkommen_vater - st.session_state.sockelbetrag_vater
     # Wenn der verteilbare Betrag negativ ist, setze ihn auf 0
     if verteilbarer_betrag_mutter < 0:
         verteilbarer_betrag_mutter = 0
@@ -336,7 +337,7 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     rechenweg.append(f"Bereinigtes Einkommen Mutter: {bereinigtes_einkommen_mutter:.2f} EUR")
     rechenweg.append(f"{adjektiv_sockelbetrag_mutter}r Selbstbehalt Mutter: {sockelbetrag_mutter:.2f} EUR")
     rechenweg.append(f"Bereinigtes Einkommen Vater: {bereinigtes_einkommen_vater:.2f} EUR")
-    rechenweg.append(f"{adjektiv_sockelbetrag_vater}r Selbstbehalt Vater: {sockelbetrag_vater:.2f} EUR")
+    rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_vater}r Selbstbehalt Vater: {st.session_state.sockelbetrag_vater:.2f} EUR")
     rechenweg.append(f"Gesamteinkommen: {gesamtes_einkommen:.2f} EUR")
     rechenweg.append(f"Haftungsanteil Mutter: {anteil_mutter:.2%}")
     rechenweg.append(f"Haftungsanteil Vater: {anteil_vater:.2%}")
@@ -400,7 +401,7 @@ def erstelle_pdf():
         ["Abzugsposten 2", f"{st.session_state.abzugsposten2_vater:.2f} €"],
         ["Abzug Gesamt", f"{st.session_state.abzug_vater:.2f} €"],
         ["= bereinigtes Einkommen", f"{st.session_state.bereinigtes_einkommen_vater:.2f} €"],
-        ["./. Selbstbehalt", f"{sockelbetrag_vater:.2f} €"],
+        ["./. Selbstbehalt", f"{st.session_state.sockelbetrag_vater:.2f} €"],
         ["= verteilbarer Betrag", f"{st.session_state.verteilbarer_betrag_vater:.2f} €"]
     ]
     pdf.add_table("Vater", daten_vater, [90, 50])
@@ -412,13 +413,13 @@ def erstelle_pdf():
         ["Abzugsposten 2", f"{st.session_state.abzugsposten2_mutter:.2f} €"],
         ["Abzug Gesamt", f"{st.session_state.abzug_mutter:.2f} €"],
         ["= bereinigtes Einkommen", f"{st.session_state.bereinigtes_einkommen_mutter:.2f} €"],
-        ["./. Selbstbehalt", f"{sockelbetrag_mutter:.2f} €"],
+        ["./. Selbstbehalt", f"{st.session_state.sockelbetrag_mutter:.2f} €"],
         ["= verteilbarer Betrag", f"{st.session_state.verteilbarer_betrag_mutter:.2f} €"]
     ]
     pdf.add_table("Mutter", daten_mutter, [90, 50])
 
-    pdf.add_paragraph(f"Für den Kindsvater wurde der {adjektiv_sockelbetrag_vater} Selbstbehalt berücksichtigt.")
-    pdf.add_paragraph(f"Für die Kindsmutter wurde der {adjektiv_sockelbetrag_mutter} Selbstbehalt berücksichtigt.")
+    pdf.add_paragraph(f"Für den Kindsvater wurde der {st.session_state.adjektiv_sockelbetrag_vater} Selbstbehalt berücksichtigt.")
+    pdf.add_paragraph(f"Für die Kindsmutter wurde der {st.session_state.adjektiv_sockelbetrag_mutter} Selbstbehalt berücksichtigt.")
     pdf.add_paragraph(f"Relevantes Gesamteinkommen: {st.session_state.gesamtes_einkommen:.2f} €")
     pdf.add_paragraph(f"Verteilbarer Betrag Gesamt: {st.session_state.verteilbarer_betrag_gesamt:.2f}")
     pdf.add_paragraph(f"Haftungsanteil Mutter: {st.session_state.anteil_mutter:.2%}")
