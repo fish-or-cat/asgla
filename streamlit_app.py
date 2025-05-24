@@ -217,10 +217,10 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     # Gesamteinkommen beider Eltern
     global gesamtes_einkommen
     gesamtes_einkommen = bereinigtes_einkommen_mutter + bereinigtes_einkommen_vater
-
-    ﻿﻿sockelbetrag_mutter = st.session_state.get("sockel_amt_mutter", 0.0)
+    
+    sockelbetrag_mutter = st.session_state.get("sockel_amt_mutter", 0.0)
     sockelbetrag_vater = st.session_state.get("sockel_amt_vater", 0.0)
-                                        
+    
     global verteilbarer_betrag_mutter, verteilbarer_betrag_vater
     verteilbarer_betrag_mutter = bereinigtes_einkommen_mutter - sockelbetrag_mutter
     verteilbarer_betrag_vater = bereinigtes_einkommen_vater - sockelbetrag_vater
