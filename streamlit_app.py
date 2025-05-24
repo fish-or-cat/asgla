@@ -646,6 +646,7 @@ def sockel_expander(elternteil):
             st.session_state[f"sockel_amt_{elternteil}"] = amt
             st.session_state[f"sockel_lbl_{elternteil}"] = lbl
             st.session_state[f"edit_{elternteil}"] = False
+            st.rerun()
 
 ##Obercontainer in dem die Tabs sind für Übersichtlichkeit
 with st.container():
