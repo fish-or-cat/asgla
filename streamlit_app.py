@@ -335,7 +335,7 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     # Rechenweg schrittweise zusammenbauen
     rechenweg = []
     rechenweg.append(f"Bereinigtes Einkommen Mutter: {bereinigtes_einkommen_mutter:.2f} EUR")
-    rechenweg.append(f"{adjektiv_sockelbetrag_mutter}r Selbstbehalt Mutter: {sockelbetrag_mutter:.2f} EUR")
+    rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_mutter}r Selbstbehalt Mutter: {st.session_state.sockelbetrag_mutter:.2f} EUR")
     rechenweg.append(f"Bereinigtes Einkommen Vater: {bereinigtes_einkommen_vater:.2f} EUR")
     rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_vater}r Selbstbehalt Vater: {st.session_state.sockelbetrag_vater:.2f} EUR")
     rechenweg.append(f"Gesamteinkommen: {gesamtes_einkommen:.2f} EUR")
