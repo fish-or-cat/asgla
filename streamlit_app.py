@@ -659,7 +659,7 @@ def sockel_expander(elternteil):
         flag = None
         if auswahl == "notwendig":
             flag = st.checkbox(
-                "nicht erw.",
+                "nicht erwerbstätig",
                 key=checkbox_key
             )
 
