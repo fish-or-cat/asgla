@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import tempfile
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -8,6 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from fpdf import FPDF
 from io import BytesIO
 from fpdf.enums import XPos, YPos
+
 
 # Düsseldorfer Tabelle als Dictionarys # Pflegebedarf
 duesseldorfer_tabellen = {
@@ -332,28 +334,73 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     st.session_state.ausgleichsanspruch = ausgleichsanspruch
     
     
-    # Rechenweg schrittweise zusammenbauen
-    rechenweg = []
-    rechenweg.append(f"Bereinigtes Einkommen Mutter: {bereinigtes_einkommen_mutter:.2f} EUR")
-    rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_mutter}r Selbstbehalt Mutter: {st.session_state.sockelbetrag_mutter:.2f} EUR")
-    rechenweg.append(f"Bereinigtes Einkommen Vater: {bereinigtes_einkommen_vater:.2f} EUR")
-    rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_vater}r Selbstbehalt Vater: {st.session_state.sockelbetrag_vater:.2f} EUR")
-    rechenweg.append(f"Gesamteinkommen: {gesamtes_einkommen:.2f} EUR")
-    rechenweg.append(f"Haftungsanteil Mutter: {anteil_mutter:.2%}")
-    rechenweg.append(f"Haftungsanteil Vater: {anteil_vater:.2%}")
-    rechenweg.append(f"Regelbedarf des Kindes laut Düsseldorfer Tabelle: {regelbedarf:.2f} EUR")
-    if mehrbedarf > 0:
-        rechenweg.append(f"Mehrbedarf ({mehrbez}): {mehrbedarf:.2f} EUR")
-    if sonderbedarf > 0:
-        rechenweg.append(f"Sonderbedarf ({sonderbez}): {sonderbedarf:.2f} EUR")
-    rechenweg.append(f"Gesamtbedarf Kind: {gesamtbedarf:.2f} EUR")
-    rechenweg.append(f"Kindergeld: {kindergeld:.2f} EUR")
-    rechenweg.append(f"Kindergeldempfänger: {kindergeld_empfaenger}")
-    rechenweg.append(f"Betreuungsanteil pro Elternteil: {betreuungsanteil_mutter:.2f} EUR (Mutter), {betreuungsanteil_vater:.2f} EUR (Vater)")
-    rechenweg.append(f"Baranteil pro Elternteil: {baranteil_mutter:.2f} EUR (Mutter), {baranteil_vater:.2f} EUR (Vater)")
-    rechenweg.append(f"Ausgleichsanspruch: {ausgleichsanspruch:.2f} EUR")
-    # In einzelnen String zusammenfassen
-    return ausgleichsanspruch, "\n".join(rechenweg)
+    df_vater = pd.DataFrame({
+        "": [  # Leere Spaltenüberschrift
+            f"{bereinigtes_einkommen_vater:.2f} EUR",
+            f"{st.session_state.sockelbetrag_vater:.2f} EUR",
+            f"{anteil_vater:.2%}",
+            f"{baranteil_vater:.2f} EUR",
+            f"{betreuungsanteil_vater:.2f} EUR"
+        ]
+    }, index=[
+        "Bereinigtes Einkommen",
+        f"{st.session_state.adjektiv_sockelbetrag_vater}r Selbstbehalt",
+        "Haftungsanteil",
+        "Baranteil",
+        "Betreuungsanteil"
+    ])
+
+    df_mutter = pd.DataFrame({
+        "": [
+            f"{bereinigtes_einkommen_mutter:.2f} EUR",
+            f"{st.session_state.sockelbetrag_mutter:.2f} EUR",
+            f"{anteil_mutter:.2%}",
+            f"{baranteil_mutter:.2f} EUR",
+            f"{betreuungsanteil_mutter:.2f} EUR"
+        ]
+    }, index=[
+        "Bereinigtes Einkommen",
+        f"{st.session_state.adjektiv_sockelbetrag_mutter}r Selbstbehalt",
+        "Haftungsanteil",
+        "Baranteil",
+        "Betreuungsanteil"
+    ])
+
+    df_kind = pd.DataFrame({
+        "": [
+            f"{regelbedarf:.2f} EUR",
+            f"{mehrbedarf:.2f} EUR" if mehrbedarf > 0 else "-",
+            f"{sonderbedarf:.2f} EUR" if sonderbedarf > 0 else "-",
+            f"{gesamtbedarf:.2f} EUR",
+            f"{kindergeld:.2f} EUR",
+            kindergeld_empfaenger
+        ]
+    }, index=[
+        "Regelbedarf",
+        "Mehrbedarf",
+        "Sonderbedarf",
+        "Gesamtbedarf",
+        "Kindergeld",
+        "Kindergeldempfänger"
+    ])    
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("### Vater")
+        st.table(df_vater.style.hide(axis="index"))
+
+    with col2:
+        st.write("### Mutter")
+        st.table(df_mutter.style.hide(axis="index"))
+
+    st.write("### Bedarf Kind")
+    st.table(df_kind.style.hide(axis="index"))
+
+    st.write(f"### Ausgleichsanspruch: **{ausgleichsanspruch:.2f} EUR**")
+
+
+    return ausgleichsanspruch
+
 
 class PDF(FPDF):
     def header(self):
@@ -510,12 +557,10 @@ def berechne_und_zeige():
         jahr
     )
 
-    st.write(f"Regelbedarf des Kindes: {st.session_state.regelbedarf} EUR")
-
     st.session_state.kindergeld = get_kindergeld(jahr)
 
     # Ausgleichsanspruch berechnen
-    st.session_state.aktueller_anspruch, st.session_state.aktueller_rechenweg = berechne_ausgleichsanspruch(
+    st.session_state.aktueller_anspruch = berechne_ausgleichsanspruch(
         monat,
         jahr,
         st.session_state.einkommen_mutter,
@@ -545,7 +590,6 @@ def berechne_und_zeige():
         kindergeld_empfaenger
     )
 
-    st.write(st.session_state.aktueller_rechenweg)
 
 
 # GUI ANFANG #
