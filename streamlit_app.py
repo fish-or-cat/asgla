@@ -477,9 +477,9 @@ def erstelle_pdf():
     if st.session_state.zusatzbedarf > 0:
         daten_kind.append(["Zusatzbedarf", f"{st.session_state.zusatzbedarf:.2f} €"])
     if st.session_state.mehrbedarf > 0:
-        daten_kind.append([f"davon Mehrbedarf ({mehrbez})", f"{st.session_state.mehrbedarf:.2f} €"])
+        daten_kind.append([f"davon Mehrbedarf ({st.session_state.mehrbez})", f"{st.session_state.mehrbedarf:.2f} €"])
     if st.session_state.sonderbedarf > 0:
-        daten_kind.append([f"davon Sonderbedarf ({sonderbez})", f"{st.session_state.sonderbedarf:.2f} €"])
+        daten_kind.append([f"davon Sonderbedarf ({st.session_state.sonderbez})", f"{st.session_state.sonderbedarf:.2f} €"])
     daten_kind.append(["= Gesamtbedarf", f"{st.session_state.gesamtbedarf:.2f} €"])
     daten_kind.append(["Kindergeld", f"{st.session_state.kindergeld:.2f} €"])
     pdf.add_table("Angaben zum Kind", daten_kind, [90, 50])
