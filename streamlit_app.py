@@ -1,9 +1,18 @@
 import streamlit as st
+import math
+import tempfile
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from fpdf import FPDF
+from io import BytesIO
+from fpdf.enums import XPos, YPos
+import os
+import os
+print("Arbeitsverzeichnis:", os.getcwd())
+
 
 # Düsseldorfer Tabelle als Dictionarys # Pflegebedarf
 duesseldorfer_tabellen = {
@@ -147,7 +156,7 @@ SELBSTBEHALTE = {
 }
 
 def berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutter, alter, jahr):
-    global ergebnis_var 
+
     einkommen = bereinigtes_einkommen_vater + bereinigtes_einkommen_mutter
 
     # Bestimme die Altersgruppe anhand des Alters
@@ -214,9 +223,15 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     global gesamtes_einkommen
     gesamtes_einkommen = bereinigtes_einkommen_mutter + bereinigtes_einkommen_vater
 
+    st.session_state.sockelbetrag_mutter = st.session_state.get("sockel_amt_mutter", 0.0)
+    st.session_state.adjektiv_sockelbetrag_mutter = st.session_state.get("sockel_lbl_mutter", "angemessene")
+    st.session_state.sockelbetrag_vater = st.session_state.get("sockel_amt_vater", 0.0)
+    st.session_state.adjektiv_sockelbetrag_vater = st.session_state.get("sockel_lbl_vater", "angemessene")
+
+    
     global verteilbarer_betrag_mutter, verteilbarer_betrag_vater
-    verteilbarer_betrag_mutter = bereinigtes_einkommen_mutter - sockelbetrag_mutter
-    verteilbarer_betrag_vater = bereinigtes_einkommen_vater - sockelbetrag_vater
+    verteilbarer_betrag_mutter = bereinigtes_einkommen_mutter - st.session_state.sockelbetrag_mutter
+    verteilbarer_betrag_vater = bereinigtes_einkommen_vater - st.session_state.sockelbetrag_vater
     # Wenn der verteilbare Betrag negativ ist, setze ihn auf 0
     if verteilbarer_betrag_mutter < 0:
         verteilbarer_betrag_mutter = 0
@@ -293,14 +308,42 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
         else:
             ausgleichsanspruch = auszugleichender_betrag - abzufuehrendes_kindergeld  # Kindergeld wird abgezogen
 
+    ausgleichsanspruch = math.ceil(ausgleichsanspruch)
     print(f"Ausgleichsanspruch: {ausgleichsanspruch} EUR")
+
+    # für weitere Vorgänge bei streamlit übertragen
+    st.session_state.verteilbarer_betrag_mutter = verteilbarer_betrag_mutter
+    st.session_state.verteilbarer_betrag_vater = verteilbarer_betrag_vater
+    st.session_state.verteilbarer_betrag_gesamt = verteilbarer_betrag_gesamt
+    st.session_state.anteil_mutter = anteil_mutter
+    st.session_state.anteil_vater = anteil_vater
+    st.session_state.gesamtes_einkommen = gesamtes_einkommen
+    st.session_state.regelbedarf = regelbedarf
+    st.session_state.zusatzbedarf = zusatzbedarf
+    st.session_state.mehrbedarf = mehrbedarf
+    st.session_state.sonderbedarf = sonderbedarf
+    st.session_state.gesamtbedarf = gesamtbedarf
+    st.session_state.kindergeld = kindergeld
+    st.session_state.betreuungsanteil_mutter = betreuungsanteil_mutter
+    st.session_state.betreuungsanteil_vater = betreuungsanteil_vater
+    st.session_state.baranteil_mutter = baranteil_mutter
+    st.session_state.baranteil_vater = baranteil_vater
+    st.session_state.anteil_mutter_gesamtbedarf = anteil_mutter_gesamtbedarf
+    st.session_state.anteil_vater_gesamtbedarf = anteil_vater_gesamtbedarf
+    st.session_state.differenz_anteile = differenz_anteile
+    st.session_state.anspruchsberechtigt = anspruchsberechtigt
+    st.session_state.nicht_anspruchsberechtigt = nicht_anspruchsberechtigt
+    st.session_state.auszugleichender_betrag = auszugleichender_betrag
+    st.session_state.abzufuehrendes_kindergeld = abzufuehrendes_kindergeld
+    st.session_state.ausgleichsanspruch = ausgleichsanspruch
+    
     
     # Rechenweg schrittweise zusammenbauen
     rechenweg = []
     rechenweg.append(f"Bereinigtes Einkommen Mutter: {bereinigtes_einkommen_mutter:.2f} EUR")
-    rechenweg.append(f"{adjektiv_sockelbetrag_mutter}r Selbstbehalt Mutter: {sockelbetrag_mutter:.2f} EUR")
+    rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_mutter}r Selbstbehalt Mutter: {st.session_state.sockelbetrag_mutter:.2f} EUR")
     rechenweg.append(f"Bereinigtes Einkommen Vater: {bereinigtes_einkommen_vater:.2f} EUR")
-    rechenweg.append(f"{adjektiv_sockelbetrag_vater}r Selbstbehalt Vater: {sockelbetrag_vater:.2f} EUR")
+    rechenweg.append(f"{st.session_state.adjektiv_sockelbetrag_vater}r Selbstbehalt Vater: {st.session_state.sockelbetrag_vater:.2f} EUR")
     rechenweg.append(f"Gesamteinkommen: {gesamtes_einkommen:.2f} EUR")
     rechenweg.append(f"Haftungsanteil Mutter: {anteil_mutter:.2%}")
     rechenweg.append(f"Haftungsanteil Vater: {anteil_vater:.2%}")
@@ -318,313 +361,391 @@ def berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater, 
     # In einzelnen String zusammenfassen
     return ausgleichsanspruch, "\n".join(rechenweg)
 
+class PDF(FPDF):
+    def header(self):
+        pass  # kein automatischer Header
 
-def erstelle_pdf(monat, jahr, einkommen_mutter, einkommen_vater, kindergeld, regelbedarf, mehrbedarf, mehrbez,
-                 sonderbedarf, sonderbez,
-                 anspruch, rechenweg, dateiname="Ausgleichsanspruch{monat}{jahr}.pdf"):
+    def chapter_title(self, title):
+        self.set_font('DejaVu', 'B', 14)
+        self.multi_cell(0, 10, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        self.ln(5)
 
-    doc = SimpleDocTemplate(dateiname, pagesize=A4)
-    styles = getSampleStyleSheet()
-    custom_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=14, spaceAfter=12)
+    def add_table(self, title, data, col_widths):
+        self.set_fill_color(220, 220, 220)
+        self.set_font("DejaVu", 'B', 12)
+        self.cell(sum(col_widths), 10, title, 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C', fill=True)
+        self.set_font("DejaVu", '', 11)
+        for row in data:
+            self.cell(col_widths[0], 8, row[0], border=1, align='L')
+            self.cell(col_widths[1], 8, row[1], border=1, align='R')
+            self.ln()
 
-    elements = []
-    title_text = ("Berechnung Ausgleichsanspruch im Wechselmodell<br/>"
-                  f"<b>{monat} {jahr}</b>")
-    custom_style.alignment = 1  # 1 steht für zentriert
-    elements.append(Paragraph(title_text, custom_style))
-    elements.append(Spacer(1, 12))
+    def add_paragraph(self, text):
+        self.set_font("DejaVu", '', 11)
+        self.multi_cell(0, 8, text)
+        self.ln(1)
 
-    # Tabelle mit den Berechnungswerten
+def erstelle_pdf():
+    dateiname="Ausgleichsanspruch{monat}{jahr}.pdf"
+
+    pdf = PDF()
+    pdf.add_page()
+    # 2) Unicode-fähige Schrift einbinden  ← HIER einfügen
+    pdf.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf')        # normal
+    pdf.add_font('DejaVu', 'B', 'fonts/DejaVuSans-Bold.ttf')   # fett (bold)
+    pdf.add_font('DejaVu', 'I', 'fonts/DejaVuSans-Oblique.ttf') # kursiv (italic)
+    pdf.add_font('DejaVu', 'BI', 'fonts/DejaVuSans-BoldOblique.ttf') # fett+kursiv
+
+    pdf.set_font("DejaVu", size=12)
+
+    pdf.chapter_title(f"Berechnung Ausgleichsanspruch im Wechselmodell\n{monat} {jahr}")
+
+    # Tabelle Vater
     daten_vater = [
-        ["Einkommen", f"{einkommen_vater:.2f} €"],
-        ["Abzugsposten 1", f"{abzugsposten1_vater:.2f} €"],
-        ["Abzugsposten 2", f"{abzugsposten2_vater:.2f} €"],
-        ["Abzug Gesamt", f"{abzug_vater:.2f} €"],
-        ["= bereinigtes Einkommen", f"{bereinigtes_einkommen_vater:.2f} €"],
-        [f"./. Selbstbehalt", f"{sockelbetrag_vater:.2f} €"],
-        ["= verteilbarer Betrag", f"{verteilbarer_betrag_vater:.2f} €"],
+        ["Haupttätigkeit", f"{st.session_state.haupttaetigkeit_vater:.2f} €"]
     ]
 
+    # Sonstige Geldeinnahmen Vater
+    for i, eintrag in enumerate(st.session_state.geldeinnahmen_sonst_vater):
+        bezeichnung = eintrag.get("bezeichnung", f"Geldeinnahme {i + 1}")
+        wert = eintrag.get("wert", "0")
+        try:
+            betrag = float(wert)
+            daten_vater.append([f"{bezeichnung}", f"{betrag:.2f} €"])
+        except ValueError:
+            daten_vater.append([f"{bezeichnung}", "ungültig"])
+
+    # Sozialleistungen Vater (sofern beachtet)
+    bez = st.session_state.get("sozialleistungen_bez_vater", "")
+    gesamt = get_float_or_zero(st.session_state.get("sozialleistungen_betrag_vater", 0))
+    beruecksichtigt = get_float_or_zero(st.session_state.get("sozial_beruecksichtigen_vater", 0))
+    erlaeuterung = st.session_state.get("erlaeuterungen_sozial_vater", "")
+
+    if beruecksichtigt > 0:
+        daten_vater.append(
+            [f"Sozialleistung: {bez}", f"{gesamt:.2f} €(berücksichtigt: {beruecksichtigt:.2f} €)"]
+        )
+        if erlaeuterung.strip():
+            daten_vater.append(["Erläuterung Sozialleistung", erlaeuterung])
+
+    # Einkommen Vater
+    daten_vater.append(["Einkommen Vater", f"{st.session_state.einkommen_vater:.2f} €"])
+
+    # Abzugsposten Vater
+    for i, eintrag in enumerate(st.session_state.abzugsposten_vater):
+        if isinstance(eintrag, dict):
+            bezeichnung = eintrag.get("bezeichnung", f"Abzugsposten {i + 1}")
+            wert = eintrag.get("wert", "")
+        else:
+            bezeichnung = f"Abzugsposten {i + 1}"
+            wert = eintrag
+
+        try:
+            zahl = float(wert)
+            daten_vater.append([bezeichnung, f"{zahl:.2f} €"])
+        except ValueError:
+            daten_vater.append([bezeichnung, "ungültig"])
+
+    # Berechnete Zwischensummen
+    daten_vater.extend([
+        ["Abzug Gesamt", f"{st.session_state.abzug_vater:.2f} €"],
+        ["= bereinigtes Einkommen", f"{st.session_state.bereinigtes_einkommen_vater:.2f} €"],
+        ["./. Selbstbehalt", f"{st.session_state.sockelbetrag_vater:.2f} €"],
+        ["= verteilbarer Betrag", f"{st.session_state.verteilbarer_betrag_vater:.2f} €"],
+    ])
+
+    pdf.add_table("Vater", daten_vater, [90, 70])
+
+
+    # Tabelle Mutter
     daten_mutter = [
-        ["Einkommen", f"{einkommen_mutter:.2f} €"],
-        ["Abzugsposten 1", f"{abzugsposten1_mutter:.2f} €"],
-        ["Abzugsposten 2", f"{abzugsposten2_mutter:.2f} €"],
-        ["Abzug Gesamt", f"{abzug_mutter:.2f} €"],
-        ["= bereinigtes Einkommen", f"{bereinigtes_einkommen_mutter:.2f} €"],
-        [f"./. Selbstbehalt", f"{sockelbetrag_mutter:.2f} €"],
-        ["= verteilbarer Betrag", f"{verteilbarer_betrag_mutter:.2f} €"],
+        ["Haupttätigkeit", f"{st.session_state.haupttaetigkeit_mutter:.2f} €"]
     ]
 
+    # Sonstige Geldeinnahmen Mutter
+    for i, eintrag in enumerate(st.session_state.geldeinnahmen_sonst_mutter):
+        bezeichnung = eintrag.get("bezeichnung", f"Geldeinnahme {i + 1}")
+        wert = eintrag.get("wert", "0")
+        try:
+            betrag = float(wert)
+            daten_mutter.append([f"{bezeichnung}", f"{betrag:.2f} €"])
+        except ValueError:
+            daten_mutter.append([f"{bezeichnung}", "ungültig"])
+
+    # Sozialleistungen Mutter (sofern beachtet)
+    bez = st.session_state.get("sozialleistungen_bez_mutter", "")
+    gesamt = get_float_or_zero(st.session_state.get("sozialleistungen_mutter", 0))
+    beruecksichtigt = get_float_or_zero(st.session_state.get("sozial_beruecksichtigen_mutter", 0))
+    erlaeuterung = st.session_state.get("erlaeuterungen_sozial_mutter", "")
+
+    if beruecksichtigt > 0:
+        daten_mutter.append(
+            [f"Sozialleistung: {bez}", f"{gesamt:.2f} €(berücksichtigt: {beruecksichtigt:.2f} €)"]
+        )
+        if erlaeuterung.strip():
+            daten_mutter.append(["Erläuterung Sozialleistung", erlaeuterung])
+
+    daten_mutter.append(["Einkommen Mutter", f"{st.session_state.einkommen_mutter:.2f} €"])
 
 
-    daten_vater = [["Vater", ""]] + daten_vater
-    tabelle_vater = Table(daten_vater, colWidths=[120, 80])
-    tabelle_vater.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # damit die Zahlen rechts in der Zelle sind
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Kopfzeile zentrieren
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN', (0, 0), (-1, 0))  # Überschrift über beide Spalten spannen
-    ]))
+    for i, eintrag in enumerate(st.session_state.abzugsposten_mutter):
+        if isinstance(eintrag, dict):
+            bezeichnung = eintrag.get("bezeichnung", f"Abzugsposten {i + 1}")
+            wert = eintrag.get("wert", "")
+        else:
+            bezeichnung = f"Abzugsposten {i + 1}"
+            wert = eintrag
 
-    daten_mutter = [["Mutter", ""]] + daten_mutter
-    tabelle_mutter = Table(daten_mutter, colWidths=[120, 80])
-    tabelle_mutter.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # damit die Zahlen rechts in der Zelle sind
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Kopfzeile zentrieren
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN', (0, 0), (-1, 0))  # Überschrift über beide Spalten spannen
-    ]))
+        try:
+            zahl = float(wert)
+            daten_mutter.append([bezeichnung, f"{zahl:.2f} €"])
+        except ValueError:
+            daten_mutter.append([bezeichnung, "ungültig"])
 
-    tabelle_gesamt = Table([[tabelle_vater, tabelle_mutter]], colWidths=[220, 220])
-    tabelle_gesamt.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT')
-    ]))
 
-    elements.append(tabelle_gesamt) ## Einfügen der Eltern-Tabellen
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph(f"  Für den Kindsvater wurde der {adjektiv_sockelbetrag_vater} Selbstbehalt berücksichtigt", styles["Normal"]))
-    elements.append(Paragraph(f"  Für die Kindsmutter wurde der {adjektiv_sockelbetrag_mutter} Selbstbehalt berücksichtigt", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph(f"  relevantes Gesamteinkommen der Eltern für Regelbedarf: {gesamtes_einkommen:.2f} €", styles["Normal"]))
-    elements.append(Paragraph(f"  verteilbarer Betrag Gesamt: {verteilbarer_betrag_gesamt:.2f}", styles["Normal"]))
-    elements.append(Paragraph(f"  Haftungsanteil Mutter: {anteil_mutter:.2%}", styles["Normal"]))
-    elements.append(Paragraph(f"  Haftungsanteil Vater: {anteil_vater:.2%}", styles["Normal"]))
-    elements.append(Spacer(1, 12))
+    # Berechnete Zwischensummen
+    daten_mutter.extend([
+        ["= bereinigtes Einkommen", f"{st.session_state.bereinigtes_einkommen_mutter:.2f} €"],
+        ["./. Selbstbehalt", f"{st.session_state.sockelbetrag_mutter:.2f} €"],
+        ["= verteilbarer Betrag", f"{st.session_state.verteilbarer_betrag_mutter:.2f} €"],
+    ])
 
-    # Dynamische Kind-Tabelle ohne festen Zusatzbedarf
-    daten_kind = [["Angaben zum Kind", ""]]
-    daten_kind.append(["Regelbedarf", f"{regelbedarf:.2f} €"])
-    if zusatzbedarf > 0:
-        daten_kind.append([f"Zusatzbedarf", f"{zusatzbedarf:.2f} €"])
-    if mehrbedarf > 0:
-        daten_kind.append([f"   davon Mehrbedarf ({mehrbez})", f"{mehrbedarf:.2f} €"])
-    if sonderbedarf > 0:
-        daten_kind.append([f"   davon Sonderbedarf ({sonderbez})", f"{sonderbedarf:.2f} €"])
-    daten_kind.append(["= Gesamtbedarf", f"{gesamtbedarf:.2f} €"])
-    daten_kind.append(["Kindergeld", f"{kindergeld:.2f} €"])
+    pdf.add_table("Mutter", daten_mutter, [90, 70])
 
-    # Erstelle und style Tabelle
-    tabelle_gesamt_kind = Table(daten_kind, colWidths=[200, 100], hAlign='LEFT')
-    tabelle_gesamt_kind.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR',  (0, 0), (-1, 0), colors.black),
-        ('ALIGN',      (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN',      (1, 0), (1, -1), 'RIGHT'),
-        ('ALIGN',      (0, 0), (-1, 0), 'CENTER'),
-        ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING',(0, 0),(-1, 0), 12),
-        ('GRID',       (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN',       (0, 0), (-1, 0))
-    ]))
 
-    elements.append(tabelle_gesamt_kind)
-    elements.append(Spacer(1, 12))
+    pdf.add_paragraph(f"Für den Kindsvater wurde der {st.session_state.adjektiv_sockelbetrag_vater} Selbstbehalt berücksichtigt.")
+    pdf.add_paragraph(f"Für die Kindsmutter wurde der {st.session_state.adjektiv_sockelbetrag_mutter} Selbstbehalt berücksichtigt.")
+    pdf.add_paragraph(f"Relevantes Gesamteinkommen: {st.session_state.gesamtes_einkommen:.2f} €")
+    pdf.add_paragraph(f"Verteilbarer Betrag Gesamt: {st.session_state.verteilbarer_betrag_gesamt:.2f}")
+    pdf.add_paragraph(f"Haftungsanteil Mutter: {st.session_state.anteil_mutter:.2%}")
+    pdf.add_paragraph(f"Haftungsanteil Vater: {st.session_state.anteil_vater:.2%}")
 
-    elements.append(Paragraph(f"  Anteil Mutter am Gesamtbedarf: {anteil_mutter_gesamtbedarf:.2f} €", styles["Normal"]))
-    elements.append(Paragraph(f"  Anteil Vater am Gesamtbedarf: {anteil_vater_gesamtbedarf:.2f} €", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"  Differenz: {differenz_anteile:.2f} €", styles["Normal"]))
-    elements.append(Paragraph(f"  Auszugleichender Betrag (1/2) von {nicht_anspruchsberechtigt} zu leisten an {anspruchsberechtigt}: {auszugleichender_betrag:.2f} €", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-    
-    daten_kindergeldverrechnung = [
-        ["Betreuungsanteil Mutter", f"{betreuungsanteil_mutter:.2f} €"],
-        ["Baranteil Mutter", f"{baranteil_mutter:.2f} €"],
-        ["Betreuungsanteil Vater", f"{betreuungsanteil_vater:.2f} €"],
-        ["Baranteil Vater", f"{baranteil_vater:.2f} €"],
-        ["Kindergeldempfänger", f"{kindergeld_empfaenger}"],
+    # Tabelle Kind
+    daten_kind = [["Regelbedarf", f"{st.session_state.regelbedarf:.2f} €"]]
+    if st.session_state.zusatzbedarf > 0:
+        daten_kind.append(["Zusatzbedarf", f"{st.session_state.zusatzbedarf:.2f} €"])
+    if st.session_state.mehrbedarf > 0:
+        daten_kind.append([f"davon Mehrbedarf ({mehrbez})", f"{st.session_state.mehrbedarf:.2f} €"])
+    if st.session_state.sonderbedarf > 0:
+        daten_kind.append([f"davon Sonderbedarf ({sonderbez})", f"{st.session_state.sonderbedarf:.2f} €"])
+    daten_kind.append(["= Gesamtbedarf", f"{st.session_state.gesamtbedarf:.2f} €"])
+    daten_kind.append(["Kindergeld", f"{st.session_state.kindergeld:.2f} €"])
+    pdf.add_table("Angaben zum Kind", daten_kind, [90, 50])
+
+    pdf.add_paragraph(f"Anteil Mutter am Gesamtbedarf: {st.session_state.anteil_mutter_gesamtbedarf:.2f} €")
+    pdf.add_paragraph(f"Anteil Vater am Gesamtbedarf: {st.session_state.anteil_vater_gesamtbedarf:.2f} €")
+    pdf.add_paragraph(f"Differenz: {st.session_state.differenz_anteile:.2f} €")
+    pdf.add_paragraph(f"Auszugleichender Betrag (1/2) von {st.session_state.nicht_anspruchsberechtigt} zu leisten an {st.session_state.anspruchsberechtigt}: {st.session_state.auszugleichender_betrag:.2f} €")
+
+    # Kindergeldverrechnung
+    daten_kg = [
+        ["Betreuungsanteil Mutter", f"{st.session_state.betreuungsanteil_mutter:.2f} €"],
+        ["Baranteil Mutter", f"{st.session_state.baranteil_mutter:.2f} €"],
+        ["Betreuungsanteil Vater", f"{st.session_state.betreuungsanteil_vater:.2f} €"],
+        ["Baranteil Vater", f"{st.session_state.baranteil_vater:.2f} €"],
+        ["Kindergeldempfänger", kindergeld_empfaenger]
     ]
+    pdf.add_table("Kindergeldverrechnung", daten_kg, [90, 50])
 
-    daten_kindergeldverrechnung = [["Kindergeldverrechnung", ""]] + daten_kindergeldverrechnung
-    tabelle_kindergeldverrechnung = Table(daten_kindergeldverrechnung, colWidths=[150, 100])
-    tabelle_kindergeldverrechnung.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'), # damit die Zahlen rechts in der Zelle sind
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Kopfzeile zentrieren
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('SPAN', (0, 0), (-1, 0))  # Überschrift über beide Spalten spannen
-    ]))
+    pdf.add_paragraph(f"  Ausgleichsanspruch von {st.session_state.anspruchsberechtigt} gegen {st.session_state.nicht_anspruchsberechtigt}: {st.session_state.ausgleichsanspruch:.2f} €")
 
-    tabelle_gesamt_kindergeldverrechnung = Table([[tabelle_kindergeldverrechnung]])
-    tabelle_gesamt.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT')
-    ]))
-
-    elements.append(tabelle_gesamt_kindergeldverrechnung) ## Einfügen der Kindergeldverrechnung als Tabelle
-    elements.append(Spacer(1, 12))
-
-    elements.append(Paragraph(f"  Ausgleichsanspruch von {anspruchsberechtigt} gegen {nicht_anspruchsberechtigt}: {ausgleichsanspruch:.2f} €", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    doc.build(elements)
-    print(f"PDF {dateiname} erfolgreich erstellt!")
-    return dateiname
+        # PDF in einen BytesIO-Buffer schreiben:
+    pdf_buffer = BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)  # Zeiger an den Anfang setzen!
+    return pdf_buffer
 
 def berechne_und_zeige():
-    # Berechnung des Einkommens der Mutter und des Vaters
+
+    st.session_state.monat = monat
+    st.session_state.jahr = jahr
 
     # Mutter
-    haupttaetigkeit_mutter = get_float_or_zero(haupttaetigkeit_mutter_input)
-    weitere_einkuenfte_mutter = get_float_or_zero(weitere_einkuenfte_mutter_input)
-    einkommen_mutter = haupttaetigkeit_mutter + weitere_einkuenfte_mutter
+    ## Haupttätigkeit
+    st.session_state.haupttaetigkeit_mutter = get_float_or_zero(haupttaetigkeit_mutter_input)
 
-    global abzugsposten1_mutter, abzugsposten2_mutter, abzug_mutter
-    abzugsposten1_mutter = get_float_or_zero(abzugsposten1_mutter_input)
-    abzugsposten2_mutter = get_float_or_zero(abzugsposten2_mutter_input)
-    abzug_mutter = abzugsposten1_mutter + abzugsposten2_mutter
+    ## Summe der sonstigen Geldeinnahmen (dynamisch)
+    summe_sonstige_einnahmen_mutter = 0.0
+    for i, eintrag in enumerate(st.session_state.geldeinnahmen_sonst_mutter):
+        wert = eintrag.get("wert", "")
+        try:
+            betrag = float(wert)
+            if betrag < 0:
+                st.error(f"Sonstige Geldeinnahme {i + 1} Mutter darf nicht negativ sein.")
+            else:
+                summe_sonstige_einnahmen_mutter += betrag
+        except ValueError:
+            st.error(f"Sonstige Geldeinnahme {i + 1} Mutter ist keine gültige Zahl.")
 
-    bereinigtes_einkommen_mutter = einkommen_mutter - abzug_mutter
+    if st.session_state.sozialleistungen_mutter:
+        sozial_beruecksichtigen_mutter = get_float_or_zero(st.session_state.get("sozial_beruecksichtigen_mutter", 0.0))
+    else:
+        sozial_beruecksichtigen_mutter = 0.0
+        st.session_state.sozial_beruecksichtigen_mutter = 0.0
+
+
+    ## Endgültiges Einkommen Mutter berechnen
+    st.session_state.einkommen_mutter = (
+        st.session_state.haupttaetigkeit_mutter +
+        summe_sonstige_einnahmen_mutter +
+        sozial_beruecksichtigen_mutter
+    )
+
+    ## Abzugsposten
+    abzug_mutter = 0.0
+    fehler_mutter = False
+
+    for i, eintrag in enumerate(st.session_state.abzugsposten_mutter):
+        wert = eintrag.get("wert", "")
+        try:
+            zahl = float(wert)
+            if zahl < 0:
+                st.error(f"Abzugsposten {i + 1} Mutter darf nicht negativ sein.")
+                fehler_mutter = True
+            else:
+                abzug_mutter += zahl
+        except ValueError:
+            st.error(f"Abzugsposten {i + 1} Mutter ist keine gültige Zahl.")
+            fehler_mutter = True
+
+    if not fehler_mutter:
+        st.session_state.abzug_mutter = abzug_mutter
+        st.session_state.bereinigtes_einkommen_mutter = (
+            st.session_state.einkommen_mutter - abzug_mutter
+        )
+
+
+    st.session_state.bereinigtes_einkommen_mutter = st.session_state.einkommen_mutter - st.session_state.abzug_mutter
 
     # Vater
-    haupttaetigkeit_vater = get_float_or_zero(haupttaetigkeit_vater_input)
-    weitere_einkuenfte_vater = get_float_or_zero(weitere_einkuenfte_vater_input)
-    einkommen_vater = haupttaetigkeit_vater + weitere_einkuenfte_vater
+    # Haupttätigkeit
+    st.session_state.haupttaetigkeit_vater = get_float_or_zero(haupttaetigkeit_vater_input)
 
-    global abzugsposten1_vater, abzugsposten2_vater, abzug_vater
-    abzugsposten1_vater = get_float_or_zero(abzugsposten1_vater_input)
-    abzugsposten2_vater = get_float_or_zero(abzugsposten2_vater_input)
-    abzug_vater = abzugsposten1_vater + abzugsposten2_vater
-
-    bereinigtes_einkommen_vater = einkommen_vater - abzug_vater
-
-    ## BEDARF Kind
-    alter = alter_kind or 0  # Zum Beispiel vom Benutzer eingegeben
-
-    global mehrbedarf, sonderbedarf
-    mehrbedarf = 0; mehrbez = ''
-    if zeige_mehrbedarf:
-        mehrbedarf = get_float_or_zero(mehrbetrag)
-        mehrbez = mehrbez or 'Mehrbedarf'
-    sonderbedarf = 0; sonderbez = ''
-    if zeige_sonderbedarf:
-        sonderbedarf = get_float_or_zero(sonderbetrag)
-        sonderbez = sonderbez or 'Sonderbedarf'
-
-    # Berechnung des Bedarfs des Kindes mit der Düsseldorfer Tabelle
-    regelbedarf = berechne_regelbedarf(bereinigtes_einkommen_vater, bereinigtes_einkommen_mutter, alter, jahr)
-
-    # Ausgabe des Bedarfs
-    print(f"Regelbedarf des Kindes: {regelbedarf} EUR")
-
-
-    kindergeld = get_kindergeld(jahr)
-
-    
-    global aktueller_anspruch, aktueller_rechenweg, aktuelle_eingaben
-    aktueller_anspruch, aktueller_rechenweg = berechne_ausgleichsanspruch(monat, jahr, einkommen_mutter, einkommen_vater,
-                                                                          abzug_mutter, abzug_vater, regelbedarf, mehrbedarf, mehrbez,
-                                                                          sonderbedarf, sonderbez,
-                                                                          kindergeld, kindergeld_empfaenger)
-    aktuelle_eingaben = (monat, jahr, einkommen_mutter, einkommen_vater, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, kindergeld, kindergeld_empfaenger)
-
-    st.write(f"{aktueller_rechenweg}")
-
-
-
-def speichere_pdf():
-    if aktueller_anspruch is not None:
-        monat, jahr, einkommen_mutter, einkommen_vater, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, kindergeld, kindergeld_empfaenger = aktuelle_eingaben
-        vorschlag_dateiname = f"Ausgleichsanspruch_{monat}_{jahr}.pdf"
-        dateiname = filedialog.asksaveasfilename(
-            defaultextension=".pdf",
-            filetypes=[("PDF files", "*.pdf")],
-            initialfile=vorschlag_dateiname  # Hier wird der Standardname gesetzt
-        )
-        if dateiname:
-            erstelle_pdf(monat, jahr, einkommen_mutter, einkommen_vater, kindergeld, regelbedarf, mehrbedarf, mehrbez, sonderbedarf, sonderbez, aktueller_anspruch,
-                         aktueller_rechenweg, dateiname)
-            label_ergebnis.config(text=f"PDF gespeichert: {dateiname}\n\n\n{aktueller_rechenweg}")
-
-
-# Funktion für die Bestätigung
-def bestaetigen(elternteil, auswahl, flag, custom_betrag=None):
-    neuer_betrag = None
-    if auswahl == "angemessen":
-        neuer_betrag = SELBSTBEHALTE[jahr]["angemessen"]
-    elif auswahl == "notwendig":
-        key = "notwendig_nicht_erwerbstätig" if flag else "notwendig_erwerbstätig"
-        neuer_betrag = SELBSTBEHALTE[jahr][key]
-    elif auswahl == "custom":
+    # Summe der sonstigen Einnahmen Vater berechnen
+    summe_sonstige_vater = 0.0
+    for eintrag in st.session_state.geldeinnahmen_sonst_vater:
         try:
-            neuer_betrag = float(custom_betrag)
+            zahl = float(eintrag.get("wert", "0"))
+            if zahl < 0:
+                st.warning("Sonstige Einnahmen Vater dürfen nicht negativ sein.")
+            else:
+                summe_sonstige_vater += zahl
         except ValueError:
-            st.error("Bitte eine gültige Zahl eingeben.")
-            return
+            st.warning("Ungültiger Wert bei sonstigen Einnahmen Vater.")
+
+    # Sozialleistungen – nur wenn Checkbox aktiviert
+    if st.session_state.sozialleistungen_vater:
+        sozial_beruecksichtigt_vater = get_float_or_zero(st.session_state.get("sozial_beruecksichtigen_vater", 0.0))
     else:
-        return
-    
-    # Sockelbetrag speichern
-    if elternteil == "vater":
-        global sockelbetrag_vater, adjektiv_sockelbetrag_vater
-        sockelbetrag_vater = neuer_betrag
-        adjektiv_sockelbetrag_vater = "angemessen" if auswahl == "angemessen" else "notwendig (nicht erwerbstätig)" if flag else "notwendig (erwerbstätig)" if auswahl == "notwendig" else "benutzerdefiniert"
-        st.write(f"Für den Kindsvater wird der {adjektiv_sockelbetrag_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-    elif elternteil == "mutter":
-        global sockelbetrag_mutter, adjektiv_sockelbetrag_mutter
-        sockelbetrag_mutter = neuer_betrag
-        adjektiv_sockelbetrag_mutter = "angemessen" if auswahl == "angemessen" else "notwendig (nicht erwerbstätig)" if flag else "notwendig (erwerbstätig)" if auswahl == "notwendig" else "benutzerdefiniert"
-        st.write(f"Für die Kindsmutter wird der {adjektiv_sockelbetrag_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-# Auswahlfenster für den Sockelbetrag
-def oeffne_auswahlfenster_sockelbetrag(elternteil):
-    # Auswahlmöglichkeiten für den Sockelbetrag
-    auswahl = st.radio("Bitte Sockelbetrag auswählen:", 
-                       options=["angemessen", "notwendig", "custom"])
-    
-    if auswahl == "notwendig":
-        # Dynamische Checkbox für Erwerbstätigkeit
-        flag = st.checkbox(f"Nicht erwerbstätig ({SELBSTBEHALTE[jahr]['notwendig_nicht_erwerbstätig']} €)")
-    else:
-        flag = False
-
-    if auswahl == "custom":
-        custom_betrag = st.number_input("Eigener Betrag (€):")
-    else:
-        custom_betrag = None
-
-    # Bestätigungsbutton
-    if st.button("Bestätigen"):
-        bestaetigen(elternteil, auswahl, flag, custom_betrag)
+        sozial_beruecksichtigt_vater = 0.0
+        st.session_state.sozial_beruecksichtigen_vater = 0.0
 
 
+    # Gesamteinkommen Vater berechnen
+    st.session_state.einkommen_vater = (
+        st.session_state.haupttaetigkeit_vater +
+        summe_sonstige_vater +
+        sozial_beruecksichtigt_vater
+    )
 
+    abzug_vater = 0.0
+    fehler_vater = False
+
+    for i, eintrag in enumerate(st.session_state.abzugsposten_vater):
+        wert = eintrag.get("wert", "")
+        try:
+            zahl = float(wert)
+            if zahl < 0:
+                st.error(f"Abzugsposten {i + 1} Vater darf nicht negativ sein.")
+                fehler_vater = True
+            else:
+                abzug_vater += zahl
+        except ValueError:
+            st.error(f"Abzugsposten {i + 1} Vater ist keine gültige Zahl.")
+            fehler_vater = True
+
+    if not fehler_vater:
+        st.session_state.abzug_vater = abzug_vater
+        st.session_state.bereinigtes_einkommen_vater = (
+            st.session_state.einkommen_vater - abzug_vater
+        )
+
+    st.session_state.bereinigtes_einkommen_vater = st.session_state.einkommen_vater - st.session_state.abzug_vater
+
+    # Bedarf Kind
+    alter = alter_kind or 0  # Eingabe durch Nutzer
+
+    st.session_state.mehrbedarf = 0
+    st.session_state.mehrbez = ''
+    if zeige_mehrbedarf:
+        st.session_state.mehrbedarf = get_float_or_zero(mehrbetrag)
+        st.session_state.mehrbez = mehrbez or 'Mehrbedarf'
+
+    st.session_state.sonderbedarf = 0
+    st.session_state.sonderbez = ''
+    if zeige_sonderbedarf:
+        st.session_state.sonderbedarf = get_float_or_zero(sonderbetrag)
+        st.session_state.sonderbez = sonderbez or 'Sonderbedarf'
+
+    # Regelbedarf berechnen
+    st.session_state.regelbedarf = berechne_regelbedarf(
+        st.session_state.bereinigtes_einkommen_vater,
+        st.session_state.bereinigtes_einkommen_mutter,
+        alter,
+        jahr
+    )
+
+    st.write(f"Regelbedarf des Kindes: {st.session_state.regelbedarf} EUR")
+
+    st.session_state.kindergeld = get_kindergeld(jahr)
+
+    # Ausgleichsanspruch berechnen
+    st.session_state.aktueller_anspruch, st.session_state.aktueller_rechenweg = berechne_ausgleichsanspruch(
+        monat,
+        jahr,
+        st.session_state.einkommen_mutter,
+        st.session_state.einkommen_vater,
+        st.session_state.abzug_mutter,
+        st.session_state.abzug_vater,
+        st.session_state.regelbedarf,
+        st.session_state.mehrbedarf,
+        st.session_state.mehrbez,
+        st.session_state.sonderbedarf,
+        st.session_state.sonderbez,
+        st.session_state.kindergeld,
+        kindergeld_empfaenger
+    )
+
+    st.session_state.aktuelle_eingaben = (
+        monat,
+        jahr,
+        st.session_state.einkommen_mutter,
+        st.session_state.einkommen_vater,
+        st.session_state.regelbedarf,
+        st.session_state.mehrbedarf,
+        st.session_state.mehrbez,
+        st.session_state.sonderbedarf,
+        st.session_state.sonderbez,
+        st.session_state.kindergeld,
+        kindergeld_empfaenger
+    )
+
+    st.write(st.session_state.aktueller_rechenweg)
+
+
+# GUI ANFANG #
 # Titel und feste "Fenstergröße" (Streamlit ist responsiv, aber wir können die Breite anpassen)
 st.set_page_config(page_title="Ausgleichsanspruch Wechselmodell", layout="wide")
 
 st.title("Ausgleichsanspruch Wechselmodell")
 
-# Scrollbar in Streamlit ist automatisch, keine Canvas nötig
-
-# Monat und Jahr Dropdowns
-monate = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
-jahre = ["2025", "2024", "2023"]
-
-col1, col2 = st.columns(2)
-
-# Monat Dropdown
-monat = col1.selectbox("Monat:", monate, index=0)  # Standardwert = Januar
-
-# Jahr Dropdown
-jahr = col2.selectbox("Jahr:", jahre, index=0)  # Standardwert = 2025
-
-# Ergebnis-Variable (wie tk.StringVar)
-ergebnis_var = ""
+# Jahr/Monat Auswahl
+col_jahr, col_monat = st.columns(2)
+jahr = col_jahr.selectbox("📆 Jahr", list(SELBSTBEHALTE.keys()), index=0)
+monat = col_monat.selectbox("📅 Monat", [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember"
+], index=0)
 
 
 # Werte bei Nichteingabe auf 0 setzen
@@ -642,121 +763,425 @@ def get_float_or_zero(val):
     except (ValueError, AttributeError):
         return 0.0
 
-st.header("Eingaben Vater")
+# Session-State initialisieren
+for p in ["vater", "mutter"]:
+    if f"sockel_amt_{p}" not in st.session_state:
+        st.session_state[f"sockel_amt_{p}"] = SELBSTBEHALTE[jahr]["angemessen"]
+        st.session_state[f"sockel_lbl_{p}"] = "angemessene"
+    if f"edit_{p}" not in st.session_state:
+        st.session_state[f"edit_{p}"] = False
 
-haupttaetigkeit_vater_input = st.text_input("Haupttätigkeit Vater:", value="5000")
-weitere_einkuenfte_vater_input = st.text_input("Weitere Einkünfte Vater:", value="300")
+# Wenn Jahr gewechselt wurde: Sockel auf Standard zurücksetzen
+if st.session_state.get("jahr_prev") != jahr:
+    for p in ["vater","mutter"]:
+        st.session_state[f"sockel_amt_{p}"] = SELBSTBEHALTE[jahr]["angemessen"]
+        st.session_state[f"sockel_lbl_{p}"] = "angemessene"
+    st.session_state["jahr_prev"] = jahr
 
-# Funktion zum Hinzufügen von Abzugsposten
-def add_abzugsposten():
-    if len(st.session_state.abzugsposten) < 5:  # Maximale Anzahl von Abzugsposten auf 5 setzen
-        st.session_state.abzugsposten.append("100")  # Neuen Abzugsposten hinzufügen
-    else:
-        st.warning("Es können maximal 5 Abzugsposten hinzugefügt werden!")
+st.markdown("––––––––––––––––––––––––––")
 
-# Abzugsposten anzeigen und Eingabefelder generieren
-for i, abzug in enumerate(st.session_state.abzugsposten):
-    st.session_state.abzugsposten[i] = st.text_input(f"Abzugsposten {i + 1} Vater:", value=abzug, key=f"abzug_{i}")
+# Helper-Funktion: Sockel-Auswahl-Expander
 
-# Button zum Hinzufügen eines weiteren Abzugspostens
-if st.button("Weitere Abzugsposten hinzufügen"):
-    add_abzugsposten()
+# Form innerhalb des Expanders, sorgt dafür, dass der Bestätigen-Button beim ersten Klick greift
+def sockel_expander(elternteil):
+    radio_key = f"rad_{elternteil}"
+    checkbox_key = f"chk_{elternteil}_nicht"
+    custom_key = f"num_{elternteil}_custom"
 
+    # Radio und dynamische Felder außerhalb der Form, damit sie sofort reagieren
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        auswahl = st.radio(
+            "Bitte Sockelbetrag auswählen:",
+            ["angemessen", "notwendig", "benutzerdefiniert"],
+            key=radio_key
+        )
+    with col2:
+        flag = None
+        if auswahl == "notwendig":
+            flag = st.checkbox(
+                "nicht erw.",
+                key=checkbox_key
+            )
 
-st.header("Eingaben Mutter")
+    custom = None
+    if auswahl == "benutzerdefiniert":
+        custom = st.number_input(
+            "Benutzerdefinierter Betrag (€):", min_value=0.0,
+            key=custom_key
+        )
 
-haupttaetigkeit_mutter_input = st.text_input("Haupttätigkeit Mutter:", value="1500")
-weitere_einkuenfte_mutter_input = st.text_input("Weitere Einkünfte Mutter:", value="100")
-abzugsposten1_mutter_input = st.text_input("Abzugsposten 1 Mutter:", value="100")
-abzugsposten2_mutter_input = st.text_input("Abzugsposten 2 Mutter:", value="100")
+    # Form nur für den Button
+    with st.form(f"form_{elternteil}"):
+        submitted = st.form_submit_button("Bestätigen")
+        if submitted:
+            if auswahl == "angemessen":
+                amt = SELBSTBEHALTE[jahr]["angemessen"]
+                lbl = "angemessene"
+            elif auswahl == "notwendig":
+                # Falls Checkbox noch nicht gesetzt wurde, auf False zurückfallen
+                is_nicht = st.session_state.get(checkbox_key, False)
+                key_sb = "notwendig_nicht_erwerbstätig" if is_nicht else "notwendig_erwerbstätig"
+                amt = SELBSTBEHALTE[jahr][key_sb]
+                lbl = f"notwendige ({'nicht ' if is_nicht else ''}erwerbstätig)"
+            else:
+                # Falls Feld noch leer: 0.0 verwenden
+                amt = st.session_state.get(custom_key, 0.0)
+                lbl = "benutzerdefinierte"
+            st.session_state[f"sockel_amt_{elternteil}"] = amt
+            st.session_state[f"sockel_lbl_{elternteil}"] = lbl
+            st.session_state[f"edit_{elternteil}"] = False
+            st.rerun()
 
-
-
-### Zum Kind
-alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
-
-
-# SOCKELBETRAG
-jahr = jahre[0]
-var_sockel_vater = "angemessen"
-var_sockel_mutter = "angemessen"
-nicht_erwerbstätig_vater = 0
-nicht_erwerbstätig_mutter = 0
-sockelbetrag_vater = SELBSTBEHALTE[jahr]['angemessen']
-sockelbetrag_mutter = SELBSTBEHALTE[jahr]['angemessen']
-auswahl_vater = None
-auswahl_mutter = None
-rette_sockelbetrag_vater = None
-rette_sockelbetrag_mutter = None
-adjektiv_sockelbetrag_mutter = "angemessene"
-adjektiv_sockelbetrag_vater = "angemessene"
-
-# Funktion, die bei Änderung des Jahres aufgerufen wird
-def jahr_geaendert(jahr):
-    global sockelbetrag_vater, sockelbetrag_mutter, auswahl_vater, auswahl_mutter
-
-    # Update für den Vater
-    if rette_sockelbetrag_vater is not None:
-        sockelbetrag_vater = rette_sockelbetrag_vater
-    else:
-        if auswahl_vater == "angemessen":
-            sockelbetrag_vater = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl_vater == "notwendig":
-            sockelbetrag_vater = SELBSTBEHALTE[jahr]["notwendig_erwerbstätig"]  # Beispiel, kann weiter angepasst werden
-        else:  # custom
-            sockelbetrag_vater = sockelbetrag_vater  # bleibt gleich
-
-    # Update für die Mutter
-    if rette_sockelbetrag_mutter is not None:
-        sockelbetrag_mutter = rette_sockelbetrag_mutter
-    else:
-        if auswahl_mutter == "angemessen":
-            sockelbetrag_mutter = SELBSTBEHALTE[jahr]["angemessen"]
-        elif auswahl_mutter == "notwendig":
-            sockelbetrag_mutter = SELBSTBEHALTE[jahr]["notwendig_erwerbstätig"]  # Beispiel, kann weiter angepasst werden
-        else:  # custom
-            sockelbetrag_mutter = sockelbetrag_mutter  # bleibt gleich
-
-    # Anzeige der Ergebnisse
-    st.write(f"Für den Kindsvater wird der {auswahl_vater} Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-    st.write(f"Für die Kindsmutter wird der {auswahl_mutter} Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-def aendere_sockelbetrag_vater():
-    oeffne_auswahlfenster_sockelbetrag("vater")
-
-# Callback für Mutter-Änderung
-def aendere_sockelbetrag_mutter():
-    oeffne_auswahlfenster_sockelbetrag("mutter")
-
-label_sockel_vater = st.write(f"Für den Kindsvater wird der angemessene Selbstbehalt von {sockelbetrag_vater:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-if st.button("Ändern", key="btn_aendere_sockelbetrag_vater"):
-    aendere_sockelbetrag_vater()
-
-label_sockel_mutter = st.write(f"Für die Kindsmutter wird der angemessene Selbstbehalt von {sockelbetrag_mutter:.2f} € berücksichtigt. (Jahr: {jahr})")
-
-if st.button("Ändern", key="btn_aendere_sockelbetrag_mutter"):
-    aendere_sockelbetrag_mutter()
-
-jahr_geaendert(jahr)
+##Obercontainer in dem die Tabs sind für Übersichtlichkeit
+with st.container():
+    tabs = st.tabs(["👨 Einkünfte Vater", "👩 Einkünfte Mutter", "👶 Bedarf Kind"])
 
 
-# Checkbox: Mehrbedarf
-zeige_mehrbedarf = st.checkbox("Mehrbedarf hinzufügen", value=True)
+    # --- TAB 1: EINKÜNFTE VATER ---
+    with tabs[0]:
+        st.subheader("Vater – Einkünfte und Abzüge")
 
-if zeige_mehrbedarf:
-    mehrbez = st.text_input("Bezeichnung Mehrbedarf", value="Hort")
-    mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value=60)
+        col_einkünfte, col_abzüge = st.columns(2)
 
-# Checkbox: Sonderbedarf
-zeige_sonderbedarf = st.checkbox("Sonderbedarf hinzufügen", value=True)
+        with col_einkünfte:
+            st.markdown("### Einkünfte")
+            haupttaetigkeit_vater_input = st.text_input("Haupttätigkeit Vater:", value="5000")
 
-if zeige_sonderbedarf:
-    sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
-    sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value=80)
+            # Initialisierung
+            if "geldeinnahmen_sonst_vater" not in st.session_state:
+                st.session_state.geldeinnahmen_sonst_vater = []
 
-global kindergeld_empfaenger
-kindergeld_empfaenger = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
+            # Funktion zum Hinzufügen eines neuen Eintrags
+            def add_sonstige_einnahme_vater():
+                if len(st.session_state.geldeinnahmen_sonst_vater) < 5:
+                    st.session_state.geldeinnahmen_sonst_vater.append({
+                        "bezeichnung": f"Sonstige Einnahme {len(st.session_state.geldeinnahmen_sonst_vater) + 1}",
+                        "wert": "100"
+                    })
+                else:
+                    st.warning("Es können maximal 5 sonstige Einnahmen hinzugefügt werden!")
+
+            # Eingabefelder mit Entfernen-Button
+            for i, eintrag in enumerate(st.session_state.geldeinnahmen_sonst_vater):
+                cols = st.columns([4, 3, 1])
+                bezeichnung = cols[0].text_input(
+                    f"Bezeichnung {i + 1} Vater:", value=eintrag["bezeichnung"], key=f"geldeinnahme_vater_bez_{i}"
+                )
+                wert = cols[1].text_input(
+                    f"Wert {i + 1} Vater:", value=eintrag["wert"], key=f"geldeinnahme_vater_wert_{i}"
+                )
+
+                # Aktualisieren des Eintrags
+                st.session_state.geldeinnahmen_sonst_vater[i] = {"bezeichnung": bezeichnung, "wert": wert}
+
+                if cols[2].button("❌", key=f"remove_geldeinnahme_vater_{i}"):
+                    st.session_state.geldeinnahmen_sonst_vater.pop(i)
+                    st.rerun()
+                    break
+
+            # Button zum Hinzufügen
+            if st.button("Weitere Geldeinnahme Vater hinzufügen"):
+                add_sonstige_einnahme_vater()
+                st.rerun()
+
+            # Initialisierung
+            if "sozialleistungen_vater" not in st.session_state:
+                st.session_state.sozialleistungen_vater = False
+            if "sozialleistungen_bez_vater" not in st.session_state:
+                st.session_state.sozialleistungen_bez_vater = ""
+            if "sozialleistungen_betrag_vater" not in st.session_state:
+                st.session_state.sozialleistungen_betrag_vater = 0.0
+            if "sozial_beruecksichtigen_vater" not in st.session_state:
+                st.session_state.sozial_beruecksichtigen_vater = 0.0
+            if "erlaeuterungen_sozial_vater" not in st.session_state:
+                st.session_state.erlaeuterungen_sozial_vater = ""
+
+            # Checkbox
+            st.session_state.sozialleistungen_vater = st.checkbox(
+                "Vater erhält Sozialleistungen",
+                value=st.session_state.sozialleistungen_vater
+            )
+
+            # Wenn ja: Eingabefelder anzeigen
+            if st.session_state.sozialleistungen_vater:
+                st.session_state.sozialleistungen_bez_vater = st.text_input(
+                    "Bezeichnung der Sozialleistung (Vater):",
+                    value=st.session_state.sozialleistungen_bez_vater
+                )
+
+                st.session_state.sozialleistungen_betrag_vater = st.number_input(
+                    "Höhe der erhaltenen Sozialleistung (Vater):",
+                    value=float(st.session_state.sozialleistungen_betrag_vater),
+                    min_value=0.0,
+                    step=10.0,
+                    format="%.2f"
+                )
+
+                st.session_state.sozial_beruecksichtigen_vater = st.number_input(
+                    "Davon zu berücksichtigender Betrag (Vater):",
+                    value=float(st.session_state.sozial_beruecksichtigen_vater),
+                    min_value=0.0,
+                    step=10.0,
+                    format="%.2f"
+                )
+
+                st.session_state.erlaeuterungen_sozial_vater = st.text_area(
+                    "Erläuterungen zu den Sozialleistungen (Vater):",
+                    value=st.session_state.erlaeuterungen_sozial_vater
+                )
+
+                # Prüfung + automatische Korrektur für Vater
+                gesamt_sozial_vater = float(st.session_state.sozialleistungen_betrag_vater)
+                beruecksichtigt_sozial_vater = float(st.session_state.sozial_beruecksichtigen_vater)
+
+                if beruecksichtigt_sozial_vater > gesamt_sozial_vater:
+                    st.warning(
+                        "Der zu berücksichtigende Betrag wurde auf 0 gesetzt, da er größer war "
+                        "als der Gesamtbetrag der empfangenen Sozialleistungen (Vater)."
+                    )
+                    st.session_state.sozial_beruecksichtigen_vater = 0.0
+
+            else:
+                # Falls deaktiviert, sicherstellen, dass keine Werte berücksichtigt werden
+                st.session_state.sozial_beruecksichtigen_vater = 0.0
+
+
+
+        with col_abzüge:
+            st.markdown("### Abzüge Vater")
+
+            # Initialisierung der Abzugsposten
+            if "abzugsposten_vater" not in st.session_state:
+                st.session_state.abzugsposten_vater = []
+
+            # Funktion zum Hinzufügen eines neuen Abzugspostens
+            def add_abzugsposten_vater():
+                if len(st.session_state.abzugsposten_vater) < 5:
+                    index = len(st.session_state.abzugsposten_vater) + 1
+                    st.session_state.abzugsposten_vater.append({"bezeichnung": f"Abzugsposten {index}", "wert": "100"})
+                else:
+                    st.warning("Es können maximal 5 Abzugsposten hinzugefügt werden!")
+
+            # Darstellung der Abzugsposten mit Eingabefeldern
+            for i, abzug in enumerate(st.session_state.abzugsposten_vater):
+                cols = st.columns([3, 2, 1])
+                
+                bezeichnung_key = f"bezeichnung_vater_{i}"
+                wert_key = f"wert_vater_{i}"
+
+                abzug["bezeichnung"] = cols[0].text_input(
+                    f"Bezeichnung {i + 1}:", value=abzug.get("bezeichnung", ""), key=bezeichnung_key
+                )
+                abzug["wert"] = cols[1].text_input(
+                    f"Wert {i + 1}:", value=abzug.get("wert", ""), key=wert_key
+                )
+
+                if cols[2].button("❌", key=f"remove_abzug_vater_{i}"):
+                    st.session_state.abzugsposten_vater.pop(i)
+                    st.rerun()
+                    break
+
+            # Button zum Hinzufügen
+            if st.button("Weitere Abzugsposten Vater hinzufügen"):
+                add_abzugsposten_vater()
+                st.rerun()
+
+
+
+        # Aktueller Sockelbetrag
+        st.info(f"Für den Kindsvater wird der **{st.session_state['sockel_lbl_vater']}** Selbstbehalt "
+                f"von **{st.session_state['sockel_amt_vater']:.2f} €** berücksichtigt. (Jahr: {jahr})")
+
+        if st.button("Ändern", key="btn_edit_vater"):
+            st.session_state["edit_vater"] = True
+        if st.session_state["edit_vater"]:
+            with st.expander("Sockelbetrag anpassen", expanded=True):
+                sockel_expander("vater")
+
+    # --- TAB 2: EINKÜNFTE MUTTER ---
+    with tabs[1]:
+        st.subheader("Mutter – Einkünfte und Abzüge")
+
+        col_einkünfte, col_abzüge = st.columns(2)
+
+        with col_einkünfte:
+            st.markdown("### Einkünfte")
+            haupttaetigkeit_mutter_input = st.text_input("Haupttätigkeit Mutter:", value="2500")
+
+            # Initialisierung im Session State
+            if "geldeinnahmen_sonst_mutter" not in st.session_state:
+                st.session_state.geldeinnahmen_sonst_mutter = []
+
+            # Funktion zum Hinzufügen eines neuen Postens
+            def add_geldeinnahme_sonst_mutter():
+                if len(st.session_state.geldeinnahmen_sonst_mutter) < 5:
+                    i = len(st.session_state.geldeinnahmen_sonst_mutter) + 1
+                    st.session_state.geldeinnahmen_sonst_mutter.append({
+                        "bezeichnung": f"Geldeinnahme {i}",
+                        "wert": "0"
+                    })
+                else:
+                    st.warning("Es können maximal 5 sonstige Geldeinnahmen hinzugefügt werden.")
+
+            # Anzeige der Felder
+            for i, eintrag in enumerate(st.session_state.geldeinnahmen_sonst_mutter):
+                cols = st.columns([4, 3, 1])
+                bezeichnung = cols[0].text_input(
+                    f"Bezeichnung {i + 1}:", value=eintrag["bezeichnung"], key=f"sonst_bez_mutter_{i}"
+                )
+                wert = cols[1].text_input(
+                    f"Wert {i + 1}:", value=eintrag["wert"], key=f"sonst_wert_mutter_{i}"
+                )
+
+                # Update im Session State
+                st.session_state.geldeinnahmen_sonst_mutter[i] = {
+                    "bezeichnung": bezeichnung,
+                    "wert": wert
+                }
+
+                # Entfernen-Button
+                if cols[2].button("❌", key=f"remove_sonst_mutter_{i}"):
+                    st.session_state.geldeinnahmen_sonst_mutter.pop(i)
+                    st.rerun()
+                    break
+
+            # Button zum Hinzufügen
+            if st.button("Weitere Geldeinnahme Mutter hinzufügen"):
+                add_geldeinnahme_sonst_mutter()
+                st.rerun()
+
+            # Sozialleistungen
+
+            # Checkbox zur Aktivierung
+            sozialleistungen_aktiv = st.checkbox("Sozialleistungen", key="sozial_aktiv_mutter")
+
+            # Initialisierung (optional, falls nötig)
+            if "sozialleistungen_bez_mutter" not in st.session_state:
+                st.session_state.sozialleistungen_bez_mutter = ""
+            if "sozialleistungen_mutter" not in st.session_state:
+                st.session_state.sozialleistungen_mutter = "0"
+            if "sozial_beruecksichtigen_mutter" not in st.session_state:
+                st.session_state.sozial_beruecksichtigen_mutter = "0"
+            if "erlaeuterungen_sozial_mutter" not in st.session_state:
+                st.session_state.erlaeuterungen_sozial_mutter = ""
+
+            # Nur anzeigen, wenn Checkbox aktiviert ist
+            if sozialleistungen_aktiv:
+                st.session_state.sozialleistungen_bez_mutter = st.text_input(
+                    "Bezeichnung der Sozialleistung:",
+                    value=st.session_state.sozialleistungen_bez_mutter,
+                    key="sozial_bez_mutter"
+                )
+                st.session_state.sozialleistungen_mutter = st.text_input(
+                    "Gesamtbetrag empfangene Sozialleistungen:",
+                    value=st.session_state.sozialleistungen_mutter,
+                    key="sozial_gesamt_mutter"
+                )
+                st.session_state.sozial_beruecksichtigen_mutter = st.text_input(
+                    "Davon zu berücksichtigen:",
+                    value=st.session_state.sozial_beruecksichtigen_mutter,
+                    key="sozial_beruecks_mutter"
+                )
+                st.session_state.erlaeuterungen_sozial_mutter = st.text_area(
+                    "Erläuterungen zu den Sozialleistungen:",
+                    value=st.session_state.erlaeuterungen_sozial_mutter,
+                    key="sozial_erlaeuterung_mutter"
+                )
+                
+                # Werte als float holen
+                gesamt_sozial = get_float_or_zero(st.session_state.get("sozialleistungen_mutter", 0.0))
+                beruecksichtigt_sozial = get_float_or_zero(st.session_state.get("sozial_beruecksichtigen_mutter", 0.0))
+
+                # Prüfung: zu berücksichtigender Betrag darf nicht größer sein
+                if beruecksichtigt_sozial > gesamt_sozial:
+                    st.warning("Der zu berücksichtigende Betrag wurde auf 0 gesetzt, da er größer war als der Gesamtbetrag der empfangenen Sozialleistungen.")
+                    st.session_state.sozial_beruecksichtigen_mutter = "0"
+
+            else:
+                # Falls deaktiviert, sicherstellen, dass keine Werte berücksichtigt werden
+                st.session_state.sozial_beruecksichtigen_mutter = "0"
+
+
+
+        with col_abzüge:
+            st.markdown("### Abzüge Mutter")
+
+            # Initialisierung der dynamischen Abzugsposten für Mutter
+            if "abzugsposten_mutter" not in st.session_state:
+                st.session_state.abzugsposten_mutter = []
+
+            # Funktion zum Hinzufügen eines neuen Abzugspostens
+            def add_abzugsposten_mutter():
+                if len(st.session_state.abzugsposten_mutter) < 5:
+                    index = len(st.session_state.abzugsposten_mutter) + 1
+                    st.session_state.abzugsposten_mutter.append({
+                        "bezeichnung": f"Abzugsposten {index}",
+                        "wert": "100"
+                    })
+                else:
+                    st.warning("Es können maximal 5 Abzugsposten hinzugefügt werden!")
+
+            # Eingabefelder mit Entfernen-Button
+            for i, abzug in enumerate(st.session_state.abzugsposten_mutter):
+                cols = st.columns([4, 3, 1])
+                bezeichnung = cols[0].text_input(
+                    f"Bezeichnung {i + 1} Mutter:", value=abzug["bezeichnung"], key=f"abzug_mutter_bez_{i}"
+                )
+                wert = cols[1].text_input(
+                    f"Wert {i + 1} Mutter:", value=abzug["wert"], key=f"abzug_mutter_wert_{i}"
+                )
+
+                # Aktualisiere den Eintrag
+                st.session_state.abzugsposten_mutter[i] = {"bezeichnung": bezeichnung, "wert": wert}
+
+                # Entfernen-Button
+                if cols[2].button("❌", key=f"remove_abzug_mutter_{i}"):
+                    st.session_state.abzugsposten_mutter.pop(i)
+                    st.rerun()
+                    break
+
+            # Button zum Hinzufügen
+            if st.button("Weitere Abzugsposten Mutter hinzufügen"):
+                add_abzugsposten_mutter()
+                st.rerun()
+
+
+
+        st.info(f"Für die Kindsmutter wird der **{st.session_state['sockel_lbl_mutter']}** Selbstbehalt "
+                f"von **{st.session_state['sockel_amt_mutter']:.2f} €** berücksichtigt. (Jahr: {jahr})")
+
+        if st.button("Ändern", key="btn_edit_mutter"):
+            st.session_state["edit_mutter"] = True
+        if st.session_state["edit_mutter"]:
+            with st.expander("Sockelbetrag anpassen", expanded=True):
+                sockel_expander("mutter")
+
+    # --- TAB 3: BEDARF KIND ---
+    with tabs[2]:
+        st.subheader("Bedarf Kind")
+
+        ### Zum Kind
+        alter_kind = st.number_input("Alter des Kindes", value=10, step=1, min_value=0)
+
+        # Checkbox: Mehrbedarf
+        zeige_mehrbedarf = st.checkbox("Mehrbedarf hinzufügen", value=True)
+
+        if zeige_mehrbedarf:
+            mehrbez = st.text_input("Bezeichnung Mehrbedarf", value="Hort")
+            mehrbetrag = st.number_input("Betrag Mehrbedarf (EUR)", value=60)
+
+        # Checkbox: Sonderbedarf
+        zeige_sonderbedarf = st.checkbox("Sonderbedarf hinzufügen", value=True)
+
+        if zeige_sonderbedarf:
+            sonderbez = st.text_input("Bezeichnung Sonderbedarf", value="Zahnspange")
+            sonderbetrag = st.number_input("Betrag Sonderbedarf (EUR)", value=80)
+
+        global kindergeld_empfaenger
+        kindergeld_empfaenger = st.radio("Kindergeldempfänger:", ("Mutter", "Vater"))
+
+st.markdown("––––––––––––––––––––––––––")
 
 if "berechnet" not in st.session_state:
     st.session_state["berechnet"] = False
@@ -771,5 +1196,10 @@ label_ergebnis = st.empty()  # Platzhalter für das Ergebnis
 label_ergebnis.text("")  # Anfangszustand leer
 
 # PDF speichern Button
-if st.button("Als PDF speichern", disabled=not st.session_state["berechnet"]):
-    speichere_pdf
+if st.session_state["berechnet"]:
+    st.download_button(
+        label="PDF herunterladen",
+        data=erstelle_pdf(),
+        file_name=f"Ausgleichsanspruch_{st.session_state.monat}_{st.session_state.jahr}.pdf",
+        mime="application/pdf"
+    )
